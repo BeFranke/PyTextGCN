@@ -13,7 +13,6 @@ class Text2Graph(BaseEstimator, TransformerMixin):
 
     def __init__(self, word_threshold: int = 5, window_size: int = 15, save_path: str = None, n_jobs: int = 1):
         self.n_jobs = n_jobs
-        nltk.download('punkt')
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
         assert word_threshold > 0
         self.word_threshold = word_threshold
