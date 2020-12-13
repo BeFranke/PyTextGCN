@@ -50,7 +50,10 @@ class Text2Graph(BaseEstimator, TransformerMixin):
             for i, x in enumerate(occurrence_mat)
         ))
         coo = th.vstack([word_coo, docu_coo])
-        g = ...         # set up tg.data object
+        edge_weights = th.vstack([tfidf_mat[docu_coo], pmi_mat[word_coo]])
+        g = tg.Data(x=edge_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, mask=mask)
+
+        return g
 
 
     def pmi_matrix(self, n_docs):
