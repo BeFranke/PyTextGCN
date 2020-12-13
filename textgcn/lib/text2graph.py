@@ -9,8 +9,6 @@ import torch_geometric as tg
 
 
 class Text2Graph(BaseEstimator, TransformerMixin):
-    valid_stopwords = ['sklearn', 'nltk']
-
     def __init__(self, word_threshold: int = 5, window_size: int = 15, save_path: str = None, n_jobs: int = 1):
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
@@ -65,7 +63,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         freq_singular /= n_windows
         freq_dual /= n_windows
         freq_dual = th.log(freq_dual / th.outer(freq_singular, freq_singular))
-
+        freq_dual[th.arange(n_vocab), th.arange(n_vocab)] = 1
         return freq_dual
 
     def pmi_from_doc(self, doc_idx, n_vocabs):
@@ -87,16 +85,17 @@ class Text2Graph(BaseEstimator, TransformerMixin):
 
         return freq_singular, freq_dual, n_windows
 
-    def word_edges_from_doc(self, x, pmi_mat):
+    @staticmethod
+    def word_edges_from_doc(x, pmi_mat):
         # all words that occur in this document
-        occ = th.nonzero(x)
+        occ = th.squeeze(th.nonzero(x))
         # all combiantions of occ
         edges = th.cartesian_prod(occ, occ)
-        # pmi_mat[edges] should return a list of all edge weights in order of the edges, > 0 binarizes this weight
-        w = pmi_mat[edges] > 0
+        # pmi_mat[edges[:, 0], edges[:, 1]] should return a list of all edge weights in order of the edges, > 0 binarizes this weight
+        w = pmi_mat[edges[:, 0], edges[:, 1]] > 0
         # only take edges with positive weight
-        edges = edges[w > 0]
-        return edges
+        edges = edges[w]
+        return edges.float()
 
 
 
