@@ -1,22 +1,17 @@
 from typing import Union, List
 import glob
 import os
-
-import torch
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-import nltk
 import torch as th
 import joblib as jl
 from torch.nn import functional as f
+import torch_geometric as tg
 
 
 class Text2Graph(BaseEstimator, TransformerMixin):
-    valid_stopwords = ['sklearn', 'nltk']
-
     def __init__(self, word_threshold: int = 5, window_size: int = 15, save_path: str = None, n_jobs: int = 1):
         self.n_jobs = n_jobs
-        nltk.download('punkt')
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
         assert word_threshold > 0
         self.word_threshold = word_threshold
@@ -25,7 +20,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         self.cv = None
         self.window_size = window_size
 
-    def fit_transform(self, X, y=None, mask=None, **fit_params):
+    def fit_transform(self, X, y=None, train_idx=None, test_idx=None, **fit_params):
         # load the text
         if isinstance(X, list):
             self.input = X
@@ -43,33 +38,36 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = TfidfTransformer().fit_transform(occurrence_mat)
-        pmi_mat = self.pmi_matrix()
+        pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
         # build word-word edges
         word_coo = th.vstack(jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.word_edges_from_doc)(i, x, pmi_mat)
-            for i, x in enumerate(occurrence_mat)
+            jl.delayed(self.word_edges_from_doc)(x, pmi_mat)
+            for x in occurrence_mat
         ))
         coo = th.vstack([word_coo, docu_coo])
-        g = ...  # set up tg.data object
+        edge_weights = th.vstack([tfidf_mat[docu_coo], pmi_mat[word_coo]])
+        g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
 
-    def pmi_matrix(self, n_docs):
+        return g
+
+    def pmi_matrix(self, n_docs, n_vocab):
         # this is bad and untested, the idea is to compute PMI matrices for each document and then combine them
         freq_singular, freq_dual, n_windows = zip(*jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.pmi_from_doc)(i) for i in range(n_docs)
+                jl.delayed(self.pmi_from_doc)(i, n_vocab) for i in range(n_docs)
         ))
-        freq_singular = th.sum(th.stack(th.freq_singular), dim=0)
+        freq_singular = th.sum(th.stack(freq_singular), dim=0)
         freq_dual = th.sum(th.stack(freq_dual), dim=0)
         n_windows = sum(n_windows)
         freq_singular /= n_windows
         freq_dual /= n_windows
         freq_dual = th.log(freq_dual / th.outer(freq_singular, freq_singular))
-
+        freq_dual[th.arange(n_vocab), th.arange(n_vocab)] = 1
         return freq_dual
 
-    def pmi_from_doc(self, doc_idx):
+    def pmi_from_doc(self, doc_idx, n_vocabs):
         # this is even worse and untested, uses for loops to apply a sliding window over the document (infrequent words are ignored)
         n_windows = 0
         doc_words = self.input[doc_idx].split()
@@ -79,7 +77,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         for window_start in range(len(doc_words) - self.window_size + 1):
             for i in range(self.window_size):
                 idx_1 = self.cv.vocabulary_[doc_words[window_start + i]]
-                freq_singular[dx_1] += 1
+                freq_singular[idx_1] += 1
                 for j in range(self.window_size - i):
                     idx_2 = self.cv.vocabulary_[doc_words[window_start + i + j]]
                     freq_dual[idx_1][idx_2] += 1
@@ -88,9 +86,17 @@ class Text2Graph(BaseEstimator, TransformerMixin):
 
         return freq_singular, freq_dual, n_windows
 
-    def word_edges_from_doc(i, x, pmi_mat):
-        occ = th.nonzero(x) * pmi_mat
-
+    @staticmethod
+    def word_edges_from_doc(x, pmi_mat):
+        # all words that occur in this document
+        occ = th.squeeze(th.nonzero(x))
+        # all combiantions of occ
+        edges = th.cartesian_prod(occ, occ)
+        # pmi_mat[edges[:, 0], edges[:, 1]] should return a list of all edge weights in order of the edges, > 0 binarizes this weight
+        w = pmi_mat[edges[:, 0], edges[:, 1]] > 0
+        # only take edges with positive weight
+        edges = edges[w]
+        return edges.float()
 
 def pmi(cv: CountVectorizer, documents, window_size, strides):
     vocab_size = len(cv.vocabulary_.values())
