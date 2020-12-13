@@ -5,6 +5,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import torch as th
 import joblib as jl
+import torch_geometric as tg
 
 
 class Text2Graph(BaseEstimator, TransformerMixin):
@@ -38,29 +39,28 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         n_docs, n_vocabs = occurrence_mat.shape
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
-        tfidf_mat = TfidfTransformer().fit_transform(occurance_mat)
-        pmi_mat = self.pmi_matrix()
+        tfidf_mat = TfidfTransformer().fit_transform(occurrence_mat)
+        pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
         # build word-word edges
         word_coo = th.vstack(jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.word_edges_from_doc)(i, x, pmi_mat)
-            for i, x in enumerate(occurrence_mat)
+            jl.delayed(self.word_edges_from_doc)(x, pmi_mat)
+            for x in occurrence_mat
         ))
         coo = th.vstack([word_coo, docu_coo])
         edge_weights = th.vstack([tfidf_mat[docu_coo], pmi_mat[word_coo]])
-        g = tg.Data(x=edge_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
+        g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
 
         return g
 
-
-    def pmi_matrix(self, n_docs):
+    def pmi_matrix(self, n_docs, n_vocab):
         # this is bad and untested, the idea is to compute PMI matrices for each document and then combine them
         freq_singular, freq_dual, n_windows = zip(*jl.Parallel(n_jobs=self.n_jobs)(
-                jl.delayed(self.pmi_from_doc)(i) for i in range(n_docs)
+                jl.delayed(self.pmi_from_doc)(i, n_vocab) for i in range(n_docs)
         ))
-        freq_singular = th.sum(th.stack(th.freq_singular), dim=0)
+        freq_singular = th.sum(th.stack(freq_singular), dim=0)
         freq_dual = th.sum(th.stack(freq_dual), dim=0)
         n_windows = sum(n_windows)
         freq_singular /= n_windows
@@ -69,8 +69,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
 
         return freq_dual
 
-
-    def pmi_from_doc(self, doc_idx):
+    def pmi_from_doc(self, doc_idx, n_vocabs):
         # this is even worse and untested, uses for loops to apply a sliding window over the document (infrequent words are ignored)
         n_windows = 0
         doc_words = self.input[doc_idx].split()
@@ -78,9 +77,9 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         freq_singular = th.zeros(n_vocabs)
         freq_dual = th.zeros(n_vocabs * n_vocabs)
         for window_start in range(len(doc_words) - self.window_size + 1):
-            for i in range(self.window_size)):
+            for i in range(self.window_size):
                 idx_1 = self.cv.vocabulary_[doc_words[window_start + i]]
-                freq_singular[dx_1] += 1
+                freq_singular[idx_1] += 1
                 for j in range(self.window_size - i):
                     idx_2 = self.cv.vocabulary_[doc_words[window_start + i + j]]
                     freq_dual[idx_1][idx_2] += 1
@@ -89,7 +88,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
 
         return freq_singular, freq_dual, n_windows
 
-    def word_edges_from_doc(i, x, pmi_mat):
+    def word_edges_from_doc(self, x, pmi_mat):
         # all words that occur in this document
         occ = th.nonzero(x)
         # all combiantions of occ
