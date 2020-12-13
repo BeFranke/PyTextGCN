@@ -88,8 +88,15 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         return freq_singular, freq_dual, n_windows
 
     def word_edges_from_doc(i, x, pmi_mat):
-        occ = th.nonzero(x) * pmi_mat
-        
+        # all words that occur in this document
+        occ = th.nonzero(x)
+        # all combiantions of occ
+        edges = th.cartesian_prod(occ, occ)
+        # pmi_mat[edges] should return a list of all edge weights in order of the edges, > 0 binarizes this weight
+        w = pmi_mat[edges] > 0
+        # only take edges with positive weight
+        edges = edges[w > 0]
+        return edges
 
 
 
