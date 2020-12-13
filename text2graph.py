@@ -22,7 +22,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         self.cv = None
         self.window_size = window_size
 
-    def fit_transform(self, X, y=None, mask=None, **fit_params):
+    def fit_transform(self, X, y=None, train_idx=None, test_idx=None, **fit_params):
         # load the text
         if isinstance(X, list):
             self.input = X
@@ -51,7 +51,7 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         ))
         coo = th.vstack([word_coo, docu_coo])
         edge_weights = th.vstack([tfidf_mat[docu_coo], pmi_mat[word_coo]])
-        g = tg.Data(x=edge_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, mask=mask)
+        g = tg.Data(x=edge_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
 
         return g
 
