@@ -1,12 +1,12 @@
-from typing import Union, List
 import glob
 import os
+
+import joblib as jl
+import torch as th
+import torch_geometric as tg
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-import torch as th
-import joblib as jl
-from torch.nn import functional as f
-import torch_geometric as tg
+
 from .pmi import pmi
 
 
