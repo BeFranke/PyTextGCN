@@ -71,5 +71,5 @@ def pmi_test():
     result = pmi(cv, data["Text"], window_size=20, strides=1)
     print(result)
 
-
-pmi_test()
+if __name__ == "__main__":
+    pmi_test()

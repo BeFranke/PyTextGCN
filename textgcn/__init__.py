@@ -1,3 +1,3 @@
-from .lib import Text2Graph
+from .lib import Text2GraphTransformer
 
-__all__ = [Text2Graph]
+__all__ = [Text2GraphTransformer]

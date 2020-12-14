@@ -7,9 +7,10 @@ import torch as th
 import joblib as jl
 from torch.nn import functional as f
 import torch_geometric as tg
+from .pmi import pmi
 
 
-class Text2Graph(BaseEstimator, TransformerMixin):
+class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, word_threshold: int = 5, window_size: int = 15, save_path: str = None, n_jobs: int = 1):
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
@@ -38,7 +39,8 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = TfidfTransformer().fit_transform(occurrence_mat)
-        pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
+        # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
+        pmi_mat = pmi(self.cv, X, self.window_size, 1)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
@@ -68,19 +70,20 @@ class Text2Graph(BaseEstimator, TransformerMixin):
         return freq_dual
 
     def pmi_from_doc(self, doc_idx, n_vocabs):
-        # this is even worse and untested, uses for loops to apply a sliding window over the document (infrequent words are ignored)
+        # this is even worse and untested, uses for loops to apply a sliding window over the document
+        # (infrequent words are ignored)
         n_windows = 0
         doc_words = self.input[doc_idx].split()
         doc_words = [word for word in doc_words if word in self.cv.vocabulary_]
         freq_singular = th.zeros(n_vocabs)
-        freq_dual = th.zeros(n_vocabs * n_vocabs)
-        for window_start in range(len(doc_words) - self.window_size + 1):
-            for i in range(self.window_size):
+        freq_dual = th.zeros((n_vocabs, n_vocabs))
+        for window_start in range(max(len(doc_words) - self.window_size + 1, 1)):
+            for i in range(min(self.window_size, len(doc_words) - window_start)):
                 idx_1 = self.cv.vocabulary_[doc_words[window_start + i]]
                 freq_singular[idx_1] += 1
                 for j in range(self.window_size - i):
                     idx_2 = self.cv.vocabulary_[doc_words[window_start + i + j]]
-                    freq_dual[idx_1][idx_2] += 1
+                    freq_dual[idx_1, idx_2] += 1
 
             n_windows += 1
 
