@@ -32,13 +32,16 @@ def pmi_document(cv, document, window_size, strides):
     # cv.fit(corpus)
 
     # encode each word individually to get one-hot encoding
-    encoded_sentence = cv.transform(document.split()).todense()
-    if encoded_sentence.shape[0] <= 1 or encoded_sentence.shape[0] < window_size:  # todo implement padding?
+    encoded_sentence = cv.transform(list(filter(lambda x: x in cv.vocabulary_, document.split()))).todense()
+    if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
-    t = th.tensor(encoded_sentence)
+    elif encoded_sentence.shape[0] < window_size:
+        sliding_window = th.tensor(encoded_sentence)[None, :, :]
+    else:
+        t = th.tensor(encoded_sentence)
 
-    # sliding window over one-hot encoding of sentence
-    sliding_window = t.unfold(dimension=0, size=window_size, step=strides)
+        # sliding window over one-hot encoding of sentence
+        sliding_window = t.unfold(dimension=0, size=window_size, step=strides)
 
     # total number of sliding windows:
     num_windows = sliding_window.shape[0]

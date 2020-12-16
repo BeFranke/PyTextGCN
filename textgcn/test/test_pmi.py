@@ -15,5 +15,5 @@ class Test(TestCase):
         cv = CountVectorizer(stop_words='english', min_df=1).fit(inp)
         p_i, p_ij, n_windows = pmi_document(cv, inp[0], 15, 1)
         self.assertEqual(n_windows, 1)
-        self.assertTrue(th.equal(p_i, th.ones(14)))
-        self.assertTrue(th.equal(p_ij, th.ones((14, 14))))
+        self.assertTrue(th.equal(p_i, th.ones(10, dtype=th.long)))
+        self.assertTrue(th.equal(p_ij, th.ones((10, 10), dtype=th.long)))
