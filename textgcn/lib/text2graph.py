@@ -3,7 +3,7 @@ import os
 
 import joblib as jl
 import torch as th
-#import torch_geometric as tg
+import torch_geometric as tg
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
@@ -31,6 +31,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 with open(f, 'r') as fp:
                     self.input.append(fp.read())
         # pre-process the text
+        self.input = []
         self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
         # build the graph

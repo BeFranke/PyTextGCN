@@ -1,5 +1,6 @@
 import string
 
+from nltk import RegexpTokenizer
 from sklearn.feature_extraction.text import CountVectorizer
 import torch as th
 import numpy as np
@@ -37,11 +38,9 @@ def pmi_document(cv, document, window_size, strides):
     # sample sentence:
     # cv = CountVectorizer(stop_words='english', min_df=1)
     # cv.fit(corpus)
-
+    document = RegexpTokenizer(r"\w+").tokenize(document)
     # encode each word individually to get one-hot encoding
-    encoded_sentence = cv.transform(
-        [x.strip(string.punctuation).lower() for x in document.split() if x.lower() in cv.vocabulary_]
-    ).todense()
+    encoded_sentence = cv.transform(document).todense()
     if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
     elif encoded_sentence.shape[0] < window_size:
