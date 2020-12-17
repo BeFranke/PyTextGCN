@@ -27,3 +27,11 @@ class Test(TestCase):
         self.assertEqual(n_windows, 1)
         self.assertTrue(th.equal(p_i, th.ones(10, dtype=th.long)))
         self.assertTrue(th.equal(p_ij, th.ones((10, 10), dtype=th.long)))
+
+    def test_pmi_2(self):
+        # some nonsense input that does not appear in STOPWORDS
+        inp = ["Alpha Beta Ceta Delta", "Alpha Ceta",  "Alpha Delta Ceta", "Beta Delta Beta"]
+        cv = CountVectorizer(min_df=1).fit(inp)
+        mat = pmi(cv, inp, 15, 1)
+        at = lambda i, j: (cv.vocabulary_[i], cv.vocabulary_[j])
+        print(mat[at('alpha', 'ceta')])

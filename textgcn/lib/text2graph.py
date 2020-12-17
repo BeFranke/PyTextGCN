@@ -3,7 +3,7 @@ import os
 
 import joblib as jl
 import torch as th
-import torch_geometric as tg
+#import torch_geometric as tg
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
