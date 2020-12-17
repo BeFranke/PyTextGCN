@@ -15,8 +15,8 @@ class Test(TestCase):
         at = lambda i, j: (cv.vocabulary_[i], cv.vocabulary_[j])
         self.assertEqual(1, actual[at('alpha', 'alpha')])
         self.assertAlmostEqual(np.log(1.5), actual[at('alpha', 'beta')], delta=1e-6)
-        self.assertEqual(np.log(0.75), actual[at('alpha', 'gamma')])
-        self.assertEqual(np.log(0.75), actual[at('alpha', 'delta')])
+        self.assertEqual(0, actual[at('alpha', 'gamma')])
+        self.assertEqual(0, actual[at('alpha', 'delta')])
         self.assertAlmostEqual(np.log(1.5), actual[at('alpha', 'epsilon')], delta=1e-6)
 
     def test_pmi_document(self):

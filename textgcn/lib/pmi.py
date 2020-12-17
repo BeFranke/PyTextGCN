@@ -23,7 +23,7 @@ def pmi(cv: CountVectorizer, documents, window_size, strides):
     p_ij = p_ij / total_windows
 
     pm_ij = th.log(th.divide(p_ij, th.outer(p_i, p_i)))  # outer product to get every ij combination
-    pm_ij = th.min(pm_ij, th.FloatTensor([0]).expand_as(pm_ij))
+    pm_ij = th.max(pm_ij, th.FloatTensor([0]).expand_as(pm_ij))
     # set main diagonal to 1
     pm_ij[np.diag_indices(pm_ij.shape[0])] = th.ones(pm_ij.shape[0])
     return pm_ij
