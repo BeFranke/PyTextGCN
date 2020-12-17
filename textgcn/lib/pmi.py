@@ -53,7 +53,10 @@ def pmi_document(cv, document, window_size, strides):
     #  print(f"Windows: {num_windows}")
     # sum one-hot encodings over all words and windows => number of occurrences per token in vocabulary
     # = number of sliding windows that contains the token:
-    p_i = sliding_window.sum(dim=(0, 2))
+    # shape of sliding window: # windows x vocab x window_size
+    p_i = sliding_window.sum(dim=2)
+    p_i = th.min(p_i, th.tensor(1))
+    p_i = p_i.sum(dim=0)
 
     # reduce each window to an encoding indication which tokens occur in the window
     occurrences = th.min(sliding_window.sum(dim=2), th.tensor(1))
