@@ -2,11 +2,11 @@ from torch import nn
 from torch_geometric.nn import GCNConv
 
 
-class GCN(nn.Module):
+class MLP_GCN(nn.Module):
     def __init__(self, in_channels, out_channels, n_gcn = 2, n_mlp = 2, n_hidden_gcn = 64, n_hidden_mlp = 64):
-        super(GCN, self).__init__()
-        self.layers = [GCNConv(in_channels, n_hidden_gcn)]
-        self.layers.append(nn.SELU())
+        super(MLP_GCN, self).__init__()
+        self.graph_layers = [GCNConv(in_channels, n_hidden_gcn)]
+        self.graph_layers.append(nn.SELU())
         for i in range(n_gcn - 1):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
             self.layers.append(nn.SELU())
@@ -20,6 +20,25 @@ class GCN(nn.Module):
 
     def forward(self, g):
         x = g.x
-        for layer in self.layers:
+        for layer in self.graph_layers:
             x = layer(x, g.edge_index, g.edge_attrs)
+        for gl in self.graph_layers:
+            x = gl(x)
         return x
+
+
+class GCN(nn.Module):
+    def __init__(self, in_channels, out_channels, n_gcn = 2,n_hidden_gcn = 64):
+        super(GCN, self).__init__()
+        self.graph_layers = [GCNConv(in_channels, n_hidden_gcn)]
+        self.graph_layers.append(nn.SELU())
+        for i in range(n_gcn - 2):
+            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
+            self.layers.append(nn.SELU())
+        self.graph_layers.append(GCNConv(n_hidden_gcn, out_channels))
+
+    def forward(self, g):
+        x = g.x
+        for layer in self.graph_layers:
+            x = layer(x, g.edge_index, g.edge_attrs)
+        return nn.Softmax(dim=-1)(x)

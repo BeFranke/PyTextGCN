@@ -7,7 +7,7 @@ import torch_geometric as tg
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 
-from .pmi import pmi
+from textgcn.lib.pmi import pmi
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
@@ -52,38 +52,3 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
 
         return g
-
-    def pmi_matrix(self, n_docs, n_vocab):
-        # this is bad and untested, the idea is to compute PMI matrices for each document and then combine them
-        freq_singular, freq_dual, n_windows = zip(*jl.Parallel(n_jobs=self.n_jobs)(
-                jl.delayed(self.pmi_from_doc)(i, n_vocab) for i in range(n_docs)
-        ))
-        freq_singular = th.sum(th.stack(freq_singular), dim=0)
-        freq_dual = th.sum(th.stack(freq_dual), dim=0)
-        n_windows = sum(n_windows)
-        freq_singular /= n_windows
-        freq_dual /= n_windows
-        freq_dual = th.log(freq_dual / th.outer(freq_singular, freq_singular))
-        freq_dual[th.arange(n_vocab), th.arange(n_vocab)] = 1
-        return freq_dual
-
-    def pmi_from_doc(self, doc_idx, n_vocabs):
-        # this is even worse and untested, uses for loops to apply a sliding window over the document
-        # (infrequent words are ignored)
-        n_windows = 0
-        doc_words = self.input[doc_idx].split()
-        doc_words = [word for word in doc_words if word in self.cv.vocabulary_]
-        freq_singular = th.zeros(n_vocabs)
-        freq_dual = th.zeros((n_vocabs, n_vocabs))
-        for window_start in range(max(len(doc_words) - self.window_size + 1, 1)):
-            for i in range(min(self.window_size, len(doc_words) - window_start)):
-                idx_1 = self.cv.vocabulary_[doc_words[window_start + i]]
-                freq_singular[idx_1] += 1
-                for j in range(self.window_size - i):
-                    idx_2 = self.cv.vocabulary_[doc_words[window_start + i + j]]
-                    freq_dual[idx_1, idx_2] += 1
-
-            n_windows += 1
-
-        return freq_singular, freq_dual, n_windows
-
