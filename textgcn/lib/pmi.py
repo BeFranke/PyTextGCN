@@ -6,7 +6,7 @@ import torch as th
 import numpy as np
 import joblib as jl
 
-def pmi(cv: CountVectorizer, documents, window_size, strides):
+def pmi(cv: CountVectorizer, documents, window_size, strides, n_jobs):
     vocab_size = len(cv.vocabulary_.values())
 
     p_i = th.zeros(vocab_size)
@@ -14,14 +14,11 @@ def pmi(cv: CountVectorizer, documents, window_size, strides):
     total_windows = 0
     num_documents = len(documents)
     # todo: parallelize
-    for i, document in enumerate(documents):
-        # print(document)
-        result = pmi_document(cv, document, window_size, strides)
-        p_i = p_i + result[0]
-        p_ij = p_ij + result[1]
-        total_windows = total_windows + result[2]
-        if i % 1000 == 0:
-            print(f"Processed {i} of {num_documents} documents.")
+    jl.Parallel(n_jobs=n_jobs)(
+        jl.delayed(pmi_document)(cv, document, window_size, strides) for i, document in enumerate(documents)
+    )
+
+
     # normalization:
     p_i = p_i / total_windows
     p_ij = p_ij / total_windows

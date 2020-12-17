@@ -41,7 +41,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = TfidfTransformer().fit_transform(occurrence_mat)
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
-        pmi_mat = pmi(self.cv, X, self.window_size, 1)
+        pmi_mat = pmi(self.cv, X, self.window_size, 1, self.n_jobs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
