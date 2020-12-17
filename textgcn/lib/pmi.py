@@ -21,7 +21,7 @@ def pmi(cv: CountVectorizer, documents, window_size, strides, n_jobs):
     p_i, p_ij, total_windows = list(map(sum, zip(*result)))
     """
     for i, document in enumerate(documents):
-        a, b, c = pmi_document(cv, document, 20, 1)
+        a, b, c = pmi_document(cv, document, window_size, strides)
         p_i = p_i + a
         p_ij = p_ij + b
         total_windows += c
