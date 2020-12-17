@@ -21,7 +21,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.cv = None
         self.window_size = window_size
 
-    def fit_transform(self, X, y=None, train_idx=None, test_idx=None, **fit_params):
+    def fit_transform(self, X, y=None, test_idx=None, **fit_params):
         # load the text
         if isinstance(X, list):
             self.input = X
@@ -31,7 +31,6 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 with open(f, 'r') as fp:
                     self.input.append(fp.read())
         # pre-process the text
-        self.input = []
         self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
         # build the graph
@@ -49,6 +48,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         word_coo = th.nonzero(pmi_mat)
         coo = th.vstack([word_coo, docu_coo])
         edge_weights = th.vstack([tfidf_mat[tuple(docu_coo.T)], pmi_mat[tuple(word_coo.T)]])
-        g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
+        g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y,
+                         test_idx=n_vocabs + test_idx)
 
         return g
