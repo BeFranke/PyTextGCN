@@ -45,12 +45,9 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
         # build word-word edges
-        word_coo = th.vstack(jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.word_edges_from_doc)(x, pmi_mat)
-            for x in occurrence_mat
-        ))
+        word_coo = th.nonzero(pmi_mat)
         coo = th.vstack([word_coo, docu_coo])
-        edge_weights = th.vstack([tfidf_mat[docu_coo], pmi_mat[word_coo]])
+        edge_weights = th.vstack([tfidf_mat[tuple(docu_coo.T)], pmi_mat[tuple(word_coo.T)]])
         g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y, train_idx=train_idx, test_idx=test_idx)
 
         return g
@@ -89,14 +86,3 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         return freq_singular, freq_dual, n_windows
 
-    @staticmethod
-    def word_edges_from_doc(x, pmi_mat):
-        # all words that occur in this document
-        occ = th.squeeze(th.nonzero(x))
-        # all combiantions of occ
-        edges = th.cartesian_prod(occ, occ)
-        # pmi_mat[edges[:, 0], edges[:, 1]] should return a list of all edge weights in order of the edges, > 0 binarizes this weight
-        w = pmi_mat[edges[:, 0], edges[:, 1]] > 0
-        # only take edges with positive weight
-        edges = edges[w]
-        return edges.float()

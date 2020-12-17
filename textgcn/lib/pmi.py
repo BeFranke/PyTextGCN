@@ -1,6 +1,6 @@
 from sklearn.feature_extraction.text import CountVectorizer
 import torch as th
-import pandas as pd
+import numpy as np
 
 def pmi(cv: CountVectorizer, documents, window_size, strides):
     vocab_size = len(cv.vocabulary_.values())
@@ -23,6 +23,8 @@ def pmi(cv: CountVectorizer, documents, window_size, strides):
     p_ij = p_ij / total_windows
 
     pm_ij = th.log(th.divide(p_ij, th.outer(p_i, p_i)))  # outer product to get every ij combination
+    # set main diagonal to 1
+    pm_ij[np.diag_indices(pm_ij.shape[0])] = th.ones(pm_ij.shape[0])
     return pm_ij
 
 

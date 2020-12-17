@@ -1,13 +1,23 @@
 from unittest import TestCase
 import torch as th
+import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 
-from textgcn.lib.pmi import pmi_document
+from textgcn.lib.pmi import pmi_document, pmi
 
 
 class Test(TestCase):
     def test_pmi(self):
-        self.fail()
+        # some nonsense input that does not appear in STOPWORDS
+        inp = ["Alpha Beta Gamma Delta Epsilon", "Alpha Beta Mu Epsilon", "Gamma Gamma Delta"]
+        cv = CountVectorizer(stop_words='english', min_df=1).fit(inp)
+        actual = pmi(cv, inp, 15, 1)
+        at = lambda i, j: (cv.vocabulary_[i], cv.vocabulary_[j])
+        self.assertEqual(1, actual[at('alpha', 'alpha')])
+        self.assertEqual(np.log(1.5), actual[at('alpha', 'beta')])
+        self.assertEqual(0, actual[at('alpha', 'gamma')])
+        self.assertEqual(0, actual[at('alpha', 'delta')])
+        self.assertEqual(np.log(1.5), actual[at('alpha', 'epsilon')])
 
     def test_pmi_document(self):
         inp = ["Far Out in the uncharted backwaters of the unfashionable end of the Western Spiral arm of the galaxy"
