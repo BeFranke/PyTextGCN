@@ -1,3 +1,5 @@
+import string
+
 from sklearn.feature_extraction.text import CountVectorizer
 import torch as th
 import numpy as np
@@ -37,7 +39,9 @@ def pmi_document(cv, document, window_size, strides):
     # cv.fit(corpus)
 
     # encode each word individually to get one-hot encoding
-    encoded_sentence = cv.transform([x.lower() for x in document.split() if x.lower() in cv.vocabulary_]).todense()
+    encoded_sentence = cv.transform(
+        [x.strip(string.punctuation).lower() for x in document.split() if x.lower() in cv.vocabulary_]
+    ).todense()
     if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
     elif encoded_sentence.shape[0] < window_size:
@@ -80,6 +84,7 @@ def pmi_test():
 
     result = pmi(cv, data["Text"], window_size=20, strides=1)
     print(result)
+
 
 if __name__ == "__main__":
     pmi_test()

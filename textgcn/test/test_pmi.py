@@ -17,7 +17,6 @@ class Test(TestCase):
         self.assertAlmostEqual(np.log(1.5), actual[at('alpha', 'epsilon')].item(), delta=1e-6)
         self.assertAlmostEqual(np.log(1.5), actual[at('gamma', 'delta')].item(), delta=1e-6)
 
-
     def test_pmi_document(self):
         inp = ["Far Out in the uncharted backwaters of the unfashionable end of the Western Spiral arm of the galaxy"
                " lies a small unregarded yellow sun."]
