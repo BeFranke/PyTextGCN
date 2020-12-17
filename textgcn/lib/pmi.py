@@ -38,7 +38,7 @@ def pmi_document(cv, document, window_size, strides):
     # sample sentence:
     # cv = CountVectorizer(stop_words='english', min_df=1)
     # cv.fit(corpus)
-    document = RegexpTokenizer(r"\w+").tokenize(document)
+    document = [x.lower() for x in RegexpTokenizer(r"\w+").tokenize(document) if x.lower() in cv.vocabulary_]
     # encode each word individually to get one-hot encoding
     encoded_sentence = cv.transform(document).todense()
     if encoded_sentence.shape[0] <= 1:
