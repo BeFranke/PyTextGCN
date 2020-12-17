@@ -10,5 +10,5 @@ y_train = train['Cat1'].tolist()
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
 
-t2g = Text2GraphTransformer(n_jobs=2).fit_transform(x_train, y_train, test_idx=test_idx)
+t2g = Text2GraphTransformer(n_jobs=1).fit_transform(x_train, y_train, test_idx=test_idx)
 

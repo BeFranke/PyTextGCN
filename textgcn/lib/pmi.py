@@ -14,11 +14,17 @@ def pmi(cv: CountVectorizer, documents, window_size, strides, n_jobs):
     p_ij = th.zeros((vocab_size, vocab_size))
     total_windows = 0
     num_documents = len(documents)
+    """
     result = jl.Parallel(n_jobs=n_jobs, prefer="threads")(
         jl.delayed(pmi_document)(cv, document, window_size, strides) for i, document in enumerate(documents)
     )
     p_i, p_ij, total_windows = list(map(sum, zip(*result)))
-
+    """
+    for i, document in enumerate(documents):
+        a, b, c = pmi_document(cv, document, 20, 1)
+        p_i = p_i + a
+        p_ij = p_ij + b
+        total_windows += c
     # normalization:
     p_i = p_i / total_windows
     p_ij = p_ij / total_windows
