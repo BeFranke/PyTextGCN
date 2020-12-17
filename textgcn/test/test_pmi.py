@@ -11,7 +11,7 @@ class Test(TestCase):
         # some nonsense input that does not appear in STOPWORDS
         inp = ["Alpha Beta Gamma Delta Epsilon", "Alpha Beta Mu Epsilon", "Gamma Gamma Delta"]
         cv = CountVectorizer(stop_words='english', min_df=1).fit(inp)
-        actual = pmi(cv, inp, 15, 1, 10)
+        actual = pmi(cv, inp, 15, 1, 4)
         at = lambda w1, w2: (cv.vocabulary_[w1], cv.vocabulary_[w2])
         self.assertAlmostEqual(np.log(1.5), actual[at('alpha', 'beta')].item(), delta=1e-6)
         self.assertAlmostEqual(np.log(1.5), actual[at('alpha', 'epsilon')].item(), delta=1e-6)
@@ -30,6 +30,6 @@ class Test(TestCase):
         # some nonsense input that does not appear in STOPWORDS
         inp = ["Alpha Beta Ceta Delta", "Alpha Ceta",  "Alpha Delta Ceta", "Beta Delta Beta"]
         cv = CountVectorizer(min_df=1).fit(inp)
-        mat = pmi(cv, inp, 15, 1)
+        mat = pmi(cv, inp, 15, 1, 4)
         at = lambda i, j: (cv.vocabulary_[i], cv.vocabulary_[j])
         print(mat[at('alpha', 'ceta')])
