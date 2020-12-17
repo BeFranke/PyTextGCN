@@ -2,6 +2,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 import torch as th
 import numpy as np
 
+
 def pmi(cv: CountVectorizer, documents, window_size, strides):
     vocab_size = len(cv.vocabulary_.values())
 
