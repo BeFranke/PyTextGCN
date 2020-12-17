@@ -34,7 +34,7 @@ def pmi_document(cv, document, window_size, strides):
     # cv.fit(corpus)
 
     # encode each word individually to get one-hot encoding
-    encoded_sentence = cv.transform(list(filter(lambda x: x in cv.vocabulary_, document.split()))).todense()
+    encoded_sentence = cv.transform([x.lower() for x in document.split() if x.lower() in cv.vocabulary_]).todense()
     if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
     elif encoded_sentence.shape[0] < window_size:
@@ -48,7 +48,6 @@ def pmi_document(cv, document, window_size, strides):
     # total number of sliding windows:
     num_windows = sliding_window.shape[0]
     #  print(f"Windows: {num_windows}")
-    vocab_size = sliding_window.shape[1]
     # sum one-hot encodings over all words and windows => number of occurrences per token in vocabulary
     # = number of sliding windows that contains the token:
     p_i = sliding_window.sum(dim=(0, 2))
