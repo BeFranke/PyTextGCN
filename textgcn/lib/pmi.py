@@ -38,7 +38,7 @@ def pmi_document(cv, document, window_size, strides):
     if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
     elif encoded_sentence.shape[0] < window_size:
-        sliding_window = th.tensor(encoded_sentence)[None, :, :]
+        sliding_window = th.tensor(encoded_sentence).T[None, :, :]
     else:
         t = th.tensor(encoded_sentence)
 
