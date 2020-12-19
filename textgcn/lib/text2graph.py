@@ -25,6 +25,10 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.window_size = window_size
 
     def fit_transform(self, X, y=None, test_idx=None, **fit_params):
+        if not isinstance(test_idx, th.Tensor):
+            test_idx = th.Tensor(test_idx)
+        if y is not None and not isinstance(y, th.LongTensor):
+            y = th.LongTensor(y)
         # load the text
         if isinstance(X, list):
             self.input = X
@@ -41,7 +45,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         n_docs, n_vocabs = occurrence_mat.shape
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
-        tfidf_mat = TfidfTransformer().fit_transform(occurrence_mat)
+        tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
         pmi_mat = pmi(self.cv, X, self.window_size, 1, self.n_jobs)
 
@@ -49,11 +53,15 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
         # build word-word edges
         word_coo = th.nonzero(pmi_mat)
-        edge_weights = th.vstack([tfidf_mat[tuple(docu_coo)], pmi_mat[tuple(word_coo.T)]])
-        coo = th.vstack([word_coo, docu_coo + th.Tensor([n_vocabs, 0])])
-        g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y,
-                         test_idx=n_vocabs + test_idx,
-                         train_idx=[n_vocabs + i for i in range(n_docs) if i not in test_idx])
+        edge_weights = th.cat([
+            tfidf_mat[tuple(docu_coo.T)],
+            pmi_mat[tuple(word_coo.T)]
+        ])
+        coo = th.vstack([word_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
+        g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
+                         test_idx=(n_vocabs + test_idx).long(),
+                         train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
+                         n_vocab = n_vocabs)
 
         if self.save_path is not None:
             print(f"saving to  {self.save_path}")
@@ -71,5 +79,5 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         if not os.path.exists(save_path):
             raise FileNotFoundError("Given file does not exist!")
         with open(save_path, "rb") as fp:
-            g = pickle.load(save_path)
+            g = pickle.load(fp)
         return g
