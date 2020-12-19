@@ -17,15 +17,15 @@ y_train = LabelEncoder().fit_transform(y_train)
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
 
-t2g = Text2GraphTransformer(n_jobs=1, word_threshold=0.1, save_path="./graphs/")
+t2g = Text2GraphTransformer(n_jobs=1, word_threshold=50, save_path="./graphs/")
 ls = os.listdir("./graphs")
 if not ls:
     g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)
 else:
     g = t2g.load_graph(os.path.join("./graphs", ls[0]))
-gcn = GCN(g.x.shape[1], len(np.unique(y_train)))
+gcn = GCN(g.x.shape[1], len(np.unique(y_train)), n_hidden_gcn=300)
 
-epochs = 50
+epochs = 100
 criterion = th.nn.CrossEntropyLoss()
 optimizer = th.optim.Adam(gcn.parameters(), lr=0.01)
 

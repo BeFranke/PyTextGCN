@@ -13,19 +13,18 @@ def pmi(cv: CountVectorizer, documents, window_size, strides, n_jobs):
     p_i = th.zeros(vocab_size)
     p_ij = th.zeros((vocab_size, vocab_size))
     total_windows = 0
-    num_documents = len(documents)
-    """
-    result = jl.Parallel(n_jobs=n_jobs, prefer="threads")(
-        jl.delayed(pmi_document)(cv, document, window_size, strides) for i, document in enumerate(documents)
-    )
-    p_i, p_ij, total_windows = list(map(sum, zip(*result)))
-    """
-    for i, document in enumerate(documents):
-        a, b, c = pmi_document(cv, document, window_size, strides)
-        p_i = p_i + a
-        p_ij = p_ij + b
-        total_windows += c
-        print(f"Document {i+1} of {len(documents)}")
+    if n_jobs is not None and n_jobs > 1:
+        result = jl.Parallel(n_jobs=n_jobs, prefer="threads")(
+            jl.delayed(pmi_document)(cv, document, window_size, strides) for i, document in enumerate(documents)
+        )
+        p_i, p_ij, total_windows = list(map(sum, zip(*result)))
+    else:
+        for i, document in enumerate(documents):
+            a, b, c = pmi_document(cv, document, window_size, strides)
+            p_i = p_i + a
+            p_ij = p_ij + b
+            total_windows += c
+            print(f"Document {i+1} of {len(documents)}")
     # normalization:
     p_i = p_i / total_windows
     p_ij = p_ij / total_windows
