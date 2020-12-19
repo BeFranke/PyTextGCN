@@ -13,7 +13,7 @@ y_train = train['Cat1'].tolist()
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
 
-t2g = Text2GraphTransformer(n_jobs=1, word_threshold=0.01)
+t2g = Text2GraphTransformer(n_jobs=1, word_threshold=0.01, save_path="./graphs/")
 g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)
 
 gcn = GCN(g.x.shape[1], len(np.unique(y_train)))
@@ -21,6 +21,10 @@ gcn = GCN(g.x.shape[1], len(np.unique(y_train)))
 epochs = 50
 criterion = th.nn.CrossEntropyLoss()
 optimizer = th.optim.Adam(gcn.parameters(), lr=0.001)
+
+device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+gcn = gcn.to(device)
+g = g.to(device)
 
 for epoch in range(epochs):
     optimizer.zero_grad()

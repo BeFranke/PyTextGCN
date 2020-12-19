@@ -1,12 +1,13 @@
 import glob
 import os
 from typing import Union
-
+import pickle
 import joblib as jl
 import torch as th
 import torch_geometric as tg
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+import time
 
 from textgcn.lib.pmi import pmi
 
@@ -45,13 +46,30 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         pmi_mat = pmi(self.cv, X, self.window_size, 1, self.n_jobs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
-        docu_coo = th.nonzero(th.from_numpy(occurrence_mat)) + th.Tensor([n_vocabs, 0])
+        docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
         # build word-word edges
         word_coo = th.nonzero(pmi_mat)
-        coo = th.vstack([word_coo, docu_coo])
-        edge_weights = th.vstack([tfidf_mat[tuple(docu_coo.T)], pmi_mat[tuple(word_coo.T)]])
+        edge_weights = th.vstack([tfidf_mat[tuple(docu_coo)], pmi_mat[tuple(word_coo.T)]])
+        coo = th.vstack([word_coo, docu_coo + th.Tensor([n_vocabs, 0])])
         g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y,
                          test_idx=n_vocabs + test_idx,
                          train_idx=[n_vocabs + i for i in range(n_docs) if i not in test_idx])
 
+        if self.save_path is not None:
+            print(f"saving to  {self.save_path}")
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path)
+            savefile = os.path.join(self.save_path, f"TGData_{time.time()}.p")
+            with open(savefile, 'wb') as fp:
+                pickle.dump(g, fp)
+            print("save successful!")
+
+        return g
+
+    @staticmethod
+    def load_graph(save_path):
+        if not os.path.exists(save_path):
+            raise FileNotFoundError("Given file does not exist!")
+        with open(save_path, "rb") as fp:
+            g = pickle.load(save_path)
         return g
