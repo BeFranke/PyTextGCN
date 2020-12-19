@@ -25,6 +25,7 @@ def pmi(cv: CountVectorizer, documents, window_size, strides, n_jobs):
         p_i = p_i + a
         p_ij = p_ij + b
         total_windows += c
+        print(f"Document {i+1} of {len(documents)}")
     # normalization:
     p_i = p_i / total_windows
     p_ij = p_ij / total_windows

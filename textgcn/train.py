@@ -1,6 +1,9 @@
 from textgcn.lib.text2graph import Text2GraphTransformer
 import pandas as pd
 import numpy as np
+from textgcn.lib.models import GCN
+import torch as th
+from sklearn.metrics import f1_score, accuracy_score
 
 train = pd.read_csv("../data/amazon/train_40k.csv")
 
@@ -10,5 +13,23 @@ y_train = train['Cat1'].tolist()
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
 
-t2g = Text2GraphTransformer(n_jobs=1).fit_transform(x_train, y_train, test_idx=test_idx)
+t2g = Text2GraphTransformer(n_jobs=1, word_threshold=0.01)
+g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)
 
+gcn = GCN(g.x.shape[1], len(np.unique(y_train)))
+
+epochs = 50
+criterion = th.nn.CrossEntropyLoss()
+optimizer = th.optim.Adam(gcn.parameters(), lr=0.001)
+
+for epoch in range(epochs):
+    optimizer.zero_grad()
+    outputs = gcn(g)[g.train_idx]
+    loss = criterion(outputs, g.y[g.train_idx])
+    loss.backwards()
+    optimizer.step()
+    print(f"[{epoch + 1}] loss: {loss.item(): .3f}")
+
+print("Optimization finished!")
+predictions = gcn(g)[g.test_idx]
+acc, f1 = accuracy_score(g.y[g.test_idx], predictions), f1_score(g.y[g.test_idx], predictions, average='macro')

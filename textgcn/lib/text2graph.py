@@ -1,5 +1,6 @@
 import glob
 import os
+from typing import Union
 
 import joblib as jl
 import torch as th
@@ -11,7 +12,8 @@ from textgcn.lib.pmi import pmi
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, word_threshold: int = 5, window_size: int = 15, save_path: str = None, n_jobs: int = 1):
+    def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 15, save_path: str = None,
+                 n_jobs: int = 1):
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
         assert word_threshold > 0
@@ -43,12 +45,13 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         pmi_mat = pmi(self.cv, X, self.window_size, 1, self.n_jobs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
-        docu_coo = th.nonzero(occurrence_mat) + th.Tensor([n_vocabs, 0])
+        docu_coo = th.nonzero(th.from_numpy(occurrence_mat)) + th.Tensor([n_vocabs, 0])
         # build word-word edges
         word_coo = th.nonzero(pmi_mat)
         coo = th.vstack([word_coo, docu_coo])
         edge_weights = th.vstack([tfidf_mat[tuple(docu_coo.T)], pmi_mat[tuple(word_coo.T)]])
         g = tg.data.Data(x=node_feats, edge_index=coo.T, edge_attr=edge_weights, y=y,
-                         test_idx=n_vocabs + test_idx)
+                         test_idx=n_vocabs + test_idx,
+                         train_idx=[n_vocabs + i for i in range(n_docs) if i not in test_idx])
 
         return g
