@@ -17,7 +17,7 @@ y_train = LabelEncoder().fit_transform(y_train)
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
 
-t2g = Text2GraphTransformer(n_jobs=1, word_threshold=50, save_path="./graphs/")
+t2g = Text2GraphTransformer(n_jobs=1, word_threshold=5, save_path="./graphs/")
 ls = os.listdir("./graphs")
 if not ls:
     g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)

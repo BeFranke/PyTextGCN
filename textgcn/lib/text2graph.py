@@ -1,10 +1,11 @@
 import glob
 import os
-from typing import Union
+from typing import Union, Dict, List, Tuple
 import pickle
 import joblib as jl
 import torch as th
 import torch_geometric as tg
+from nltk import RegexpTokenizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import time
@@ -14,7 +15,8 @@ from textgcn.lib.pmi import pmi
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 15, save_path: str = None,
-                 n_jobs: int = 1):
+                 n_jobs: int = 1, max_df=0.9):
+        self.max_df = max_df
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
         assert word_threshold > 0
@@ -38,26 +40,29 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 with open(f, 'r') as fp:
                     self.input.append(fp.read())
         # pre-process the text
-        self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold)
+        self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold, max_df=self.max_df)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
+        X = self.encode_input(X)
         # build the graph
         # id-matrix of size n_vocab + n_docs
         n_docs, n_vocabs = occurrence_mat.shape
+        self.n_docs_ = n_docs
+        self.n_vocabs_ = n_vocabs
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
-        # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
-        pmi_mat = pmi(self.cv, X, self.window_size, 1, self.n_jobs)
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
-        # build word-word edges
-        word_coo = th.nonzero(pmi_mat)
+
+        # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
+        edge_ww_weights, edges_coo = self.pmi_and_edges(X)
+
         edge_weights = th.cat([
             tfidf_mat[tuple(docu_coo.T)],
-            pmi_mat[tuple(word_coo.T)]
+            edge_ww_weights
         ])
-        coo = th.vstack([word_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
+        coo = th.vstack([edges_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
                          train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
@@ -81,3 +86,42 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         with open(save_path, "rb") as fp:
             g = pickle.load(fp)
         return g
+
+    def encode_input(self, X):
+        X = jl.Parallel(n_jobs=self.n_jobs)(
+            jl.delayed(
+                lambda doc: [
+                    x.lower() for x in RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in self.cv.vocabulary_
+                ]
+            )(doc) for doc in X
+        )
+        enc = jl.Parallel(n_jobs=self.n_jobs)(
+            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_) for sent in X
+        )
+
+        return th.stack(enc)
+
+    @staticmethod
+    def encode_sentence(n_vocabs, sent, mapping: Dict[str, int]):
+        enc = th.zeros((n_vocabs, len(sent)))
+        for i, tok in enumerate(sent):
+            enc[i, mapping[tok]] += 1
+
+        return enc
+
+    def pmi_and_edges(self, X: th.Tensor) -> Tuple[th.FloatTensor, th.FloatTensor]:
+        device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+        conv = th.nn.functional.conv1d
+        inp = X.to(device)
+        del X
+        weights = th.ones((self.n_vocabs_, 1, self.window_size))
+        res = conv(inp, weights, groups=self.n_vocabs_)      # convolution as window-summation
+
+        p_i = th.mean(res, dim=1)
+        idx = th.cartesian_prod(th.arange(self.n_vocabs_), th.arange(self.n_vocabs_))
+        # p_ij contains how often a pair of words occured in the same window, indexed by idx
+        p_ij = th.sum(th.prod(res[tuple(idx), :], dim=1), dim=0)
+
+        p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
+        idx_nonzero = th.nonzero(p_ij > 0)
+        return p_ij[idx_nonzero], idx[idx_nonzero]

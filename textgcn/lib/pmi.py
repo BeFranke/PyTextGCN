@@ -41,8 +41,11 @@ def pmi_document(cv, document, window_size, strides):
     # sample sentence:
     # cv = CountVectorizer(stop_words='english', min_df=1)
     # cv.fit(corpus)
+    raise NotImplementedError("This method currently contains a bug")
+
     document = [x.lower() for x in RegexpTokenizer(r"\w+").tokenize(document) if x.lower() in cv.vocabulary_]
     # encode each word individually to get one-hot encoding
+    # TODO this is an error, destroys the ordering of the sentence
     encoded_sentence = cv.transform(document).todense()
     if encoded_sentence.shape[0] <= 1:
         return 0, 0, 0
