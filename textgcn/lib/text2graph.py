@@ -42,12 +42,12 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # pre-process the text
         self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold, max_df=self.max_df)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
-        X = self.encode_input(X)
-        # build the graph
-        # id-matrix of size n_vocab + n_docs
         n_docs, n_vocabs = occurrence_mat.shape
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
+        X = self.encode_input(X)
+        # build the graph
+        # id-matrix of size n_vocab + n_docs
         node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
@@ -105,7 +105,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def encode_sentence(n_vocabs, sent, mapping: Dict[str, int]):
         enc = th.zeros((n_vocabs, len(sent)))
         for i, tok in enumerate(sent):
-            enc[i, mapping[tok]] += 1
+            enc[mapping[tok], i] += 1
 
         return enc
 
