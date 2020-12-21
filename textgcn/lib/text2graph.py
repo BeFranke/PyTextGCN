@@ -114,14 +114,16 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         conv = th.nn.functional.conv1d
         inp = X.to(device)
         del X
-        weights = th.ones((self.n_vocabs_, 1, self.window_size))
-        res = conv(inp, weights, groups=self.n_vocabs_)      # convolution as window-summation
-
+        weights = th.ones((self.n_vocabs_, 1, self.window_size)).to(device)
+        res: th.Tensor = conv(inp, weights, groups=self.n_vocabs_)      # convolution as window-summation
+        res = (res > 0).float()
+        res = th.cat(tuple(res), dim=1)
         p_i = th.mean(res, dim=1)
-        idx = th.cartesian_prod(th.arange(self.n_vocabs_), th.arange(self.n_vocabs_))
+        idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         # p_ij contains how often a pair of words occured in the same window, indexed by idx
-        p_ij = th.sum(th.prod(res[tuple(idx), :], dim=1), dim=0)
+        p_ij = th.sum(th.prod(res[idx, :], dim=1), dim=1)
 
         p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
         idx_nonzero = th.nonzero(p_ij > 0)
+
         return p_ij[idx_nonzero], idx[idx_nonzero]

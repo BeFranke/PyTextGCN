@@ -10,15 +10,17 @@ class TestText2Graph(TestCase):
         # simulate 2 documents and a vocabulary of 2 words
         X = th.Tensor([
             [
-                [[1, 0, 0, 0, 0, 1, 0],
-                 [0, 1, 1, 0, 0, 0, 0]]
+                [1, 0, 0, 0, 0, 1, 0],
+                [0, 1, 1, 0, 0, 0, 0]
             ],
             [
-                [[0, 1, 1, 0, 1, 0, 1],
-                 [1, 0, 0, 0, 0, 1, 0]]
+                [0, 1, 1, 0, 1, 0, 1],
+                [1, 0, 0, 0, 0, 1, 0]
             ]
         ])
-        t2t = Text2GraphTransformer(window_size=5)
+        t2t = Text2GraphTransformer(window_size=4)
         t2t.n_vocabs_ = 2
         t2t.n_docs_ = 2
         weights, edges = t2t.pmi_and_edges(X)
+        print(edges)
+        print(weights)
