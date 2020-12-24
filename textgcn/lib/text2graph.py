@@ -10,12 +10,11 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import time
 
-from textgcn.lib.pmi import pmi
-
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 15, save_path: str = None,
-                 n_jobs: int = 1, max_df=0.9):
+                 n_jobs: int = 1, max_df=0.9, batch_size=400):
+        self.batch_size = batch_size
         self.max_df = max_df
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
@@ -45,7 +44,6 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         n_docs, n_vocabs = occurrence_mat.shape
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
-        X = self.encode_input(X)
         # build the graph
         # id-matrix of size n_vocab + n_docs
         node_feats = th.eye(n_docs + n_vocabs)
@@ -54,6 +52,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
+
+        X = self.encode_input(X)
 
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
         edge_ww_weights, edges_coo = self.pmi_and_edges(X)
@@ -66,7 +66,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
                          train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
-                         n_vocab = n_vocabs)
+                         n_vocab=n_vocabs)
 
         if self.save_path is not None:
             print(f"saving to  {self.save_path}")
@@ -110,14 +110,26 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         return enc
 
     def pmi_and_edges(self, X: th.Tensor) -> Tuple[th.FloatTensor, th.FloatTensor]:
+        """
+        calculates pmi scores and edges
+        :param X: 3d tensor of shape (
+        :return:
+        """
+        # set device
         device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+        # conv synonym
         conv = th.nn.functional.conv1d
+        # dispatch input tensor to GPU if available
         inp = X.to(device)
-        del X
+        # regular summation means all conv-weights are 1
         weights = th.ones((self.n_vocabs_, 1, self.window_size)).to(device)
-        res: th.Tensor = conv(inp, weights, groups=self.n_vocabs_)      # convolution as window-summation
+        # convolution as window-summation
+        res: th.Tensor = conv(inp, weights, groups=self.n_vocabs_)
+        # binarize result and cast to float, because mean only works on float tensors
         res = (res > 0).float()
+        # get rid of minibatch dimension (a.k.a document dimension)
         res = th.cat(tuple(res), dim=1)
+        # we now have
         p_i = th.mean(res, dim=1)
         idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         # p_ij contains how often a pair of words occured in the same window, indexed by idx
