@@ -45,24 +45,22 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
         # build the graph
-        # id-matrix of size n_vocab + n_docs
-        node_feats = th.eye(n_docs + n_vocabs)
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
 
-        X = self.encode_input(X)
-
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
-        edge_ww_weights, edges_coo = self.pmi_and_edges(X)
+        edge_ww_weights, edges_coo = self.process_batches(X)
 
         edge_weights = th.cat([
             tfidf_mat[tuple(docu_coo.T)],
             edge_ww_weights
         ])
         coo = th.vstack([edges_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
+        # id-matrix of size n_vocab + n_docs
+        node_feats = th.eye(n_docs + n_vocabs)
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
                          train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
@@ -95,21 +93,22 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 ]
             )(doc) for doc in X
         )
+        max_sent_len = max(map(len, X))
         enc = jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_) for sent in X
+            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_, max_sent_len) for sent in X
         )
 
         return th.stack(enc)
 
     @staticmethod
-    def encode_sentence(n_vocabs, sent, mapping: Dict[str, int]):
-        enc = th.zeros((n_vocabs, len(sent)))
+    def encode_sentence(n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
+        enc = th.zeros((n_vocabs, max_sent_len))
         for i, tok in enumerate(sent):
             enc[mapping[tok], i] += 1
 
         return enc
 
-    def pmi_and_edges(self, X: th.Tensor) -> Tuple[th.FloatTensor, th.FloatTensor]:
+    def pmi_and_edges(self, X: th.Tensor) -> Tuple[int, th.Tensor, th.Tensor]:
         """
         calculates pmi scores and edges
         :param X: 3d tensor of shape (
@@ -126,16 +125,37 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # convolution as window-summation
         res: th.Tensor = conv(inp, weights, groups=self.n_vocabs_)
         # binarize result and cast to float, because mean only works on float tensors
-        res = (res > 0).float()
+        res = (res > 0).float().cpu()
+        n_windows = res.shape[1]
         # get rid of minibatch dimension (a.k.a document dimension)
         res = th.cat(tuple(res), dim=1)
         # we now have
-        p_i = th.mean(res, dim=1)
+        p_i = th.sum(res, dim=1)
         idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         # p_ij contains how often a pair of words occured in the same window, indexed by idx
         p_ij = th.sum(th.prod(res[idx, :], dim=1), dim=1)
 
+        # p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
+        # idx_nonzero = th.nonzero(p_ij > 0)
+
+        return n_windows, p_i, p_ij
+
+    def process_batch(self, X):
+        X = self.encode_input(X)
+        return self.pmi_and_edges(X)
+
+    def process_batches(self, X):
+        i = 0
+        res = [None] * int(len(X) / self.batch_size + 1)
+        while i < len(X):
+            print(f"Processing batch {i / self.batch_size + 1} of {int(len(X) / self.batch_size + 1)}")
+            j = min(i + self.batch_size, len(X))
+            res.append(self.process_batch(X[i:j]))
+            i = j
+        wdws, p_is, p_ijs = zip(*res)
+        p_i = sum(p_is) / sum(wdws)
+        p_ij = sum(p_ijs) / sum(wdws)
+        idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
         idx_nonzero = th.nonzero(p_ij > 0)
-
         return p_ij[idx_nonzero], idx[idx_nonzero]

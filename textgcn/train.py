@@ -12,10 +12,15 @@ train = pd.read_csv("../data/amazon/train_40k.csv")
 x_train = train['Text'].tolist()
 y_train = train['Cat1'].tolist()
 
+x_train = x_train[:10000]
+y_train = y_train[:10000]
+
 y_train = LabelEncoder().fit_transform(y_train)
 
 split_idx = int(0.8 * len(x_train))
 test_idx = range(split_idx, len(x_train))
+
+print("Data loaded!")
 
 t2g = Text2GraphTransformer(n_jobs=1, word_threshold=5, save_path="./graphs/")
 ls = os.listdir("./graphs")
