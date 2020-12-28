@@ -7,13 +7,14 @@ from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 import os
 
-train = pd.read_csv("../data/amazon/train_40k.csv")
+train = pd.read_csv("data/amazon/train_40k.csv")
 
 x_train = train['Text'].tolist()
 y_train = train['Cat1'].tolist()
 
-x_train = x_train[:10000]
-y_train = y_train[:10000]
+# unvomment if traing data should be reduced, e.g. for runtime tests
+# x_train = x_train[:10000]
+# y_train = y_train[:10000]
 
 y_train = LabelEncoder().fit_transform(y_train)
 
@@ -22,12 +23,12 @@ test_idx = range(split_idx, len(x_train))
 
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=1, word_threshold=5, save_path="./graphs/")
-ls = os.listdir("./graphs")
+t2g = Text2GraphTransformer(n_jobs=12, word_threshold=5, save_path="textgcn/graphs/", batch_size=200)
+ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)
 else:
-    g = t2g.load_graph(os.path.join("./graphs", ls[0]))
+    g = t2g.load_graph(os.path.join("textgcn/graphs", ls[0]))
 gcn = GCN(g.x.shape[1], len(np.unique(y_train)), n_hidden_gcn=300)
 
 epochs = 100

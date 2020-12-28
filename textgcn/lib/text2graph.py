@@ -1,4 +1,5 @@
 import glob
+import itertools
 import os
 from typing import Union, Dict, List, Tuple
 import pickle
@@ -26,6 +27,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.window_size = window_size
 
     def fit_transform(self, X, y=None, test_idx=None, **fit_params):
+        th.set_grad_enabled(False)
         if not isinstance(test_idx, th.Tensor):
             test_idx = th.Tensor(test_idx)
         if y is not None and not isinstance(y, th.LongTensor):
@@ -74,7 +76,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             with open(savefile, 'wb') as fp:
                 pickle.dump(g, fp)
             print("save successful!")
-
+        th.set_grad_enabled(True)
         return g
 
     @staticmethod
@@ -100,9 +102,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         return th.stack(enc)
 
-    @staticmethod
-    def encode_sentence(n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
-        enc = th.zeros((n_vocabs, max_sent_len))
+    def encode_sentence(self, n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
+        enc = th.zeros(n_vocabs, max_sent_len)
         for i, tok in enumerate(sent):
             enc[mapping[tok], i] += 1
 
@@ -131,9 +132,23 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         res = th.cat(tuple(res), dim=1)
         # we now have
         p_i = th.sum(res, dim=1)
-        idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
+
+        # idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         # p_ij contains how often a pair of words occured in the same window, indexed by idx
-        p_ij = th.sum(th.prod(res[idx, :], dim=1), dim=1)
+        # p_ij = th.sum(th.prod(res[idx, :], dim=1), dim=1)
+        # p_ij = th.zeros(self.n_vocabs_ ** 2)
+        # i = 0
+        # for id in idx:
+        # for id in itertools.product(range(self.n_vocabs_), range(self.n_vocabs_)):
+        #     print(f"\r{i:10} of {self.n_vocabs_ ** 2}", end="")
+        #     p_ij[i] += th.sum(th.prod(res[id, :], dim=0), dim=0)
+        #     i += 1
+        # print()
+        p_ij = th.FloatTensor(jl.Parallel(n_jobs=self.n_jobs)(
+            jl.delayed(
+                lambda id: th.sum(th.prod(res[id, :], dim=0), dim=0)
+            )(id) for id in itertools.product(range(self.n_vocabs_), range(self.n_vocabs_))
+        ))
 
         # p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
         # idx_nonzero = th.nonzero(p_ij > 0)
@@ -146,15 +161,20 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
     def process_batches(self, X):
         i = 0
-        res = [None] * int(len(X) / self.batch_size + 1)
+        wds = 0
+        p_is = th.zeros(self.n_vocabs_)
+        p_ijs = th.zeros(self.n_vocabs_ ** 2)
         while i < len(X):
-            print(f"Processing batch {i / self.batch_size + 1} of {int(len(X) / self.batch_size + 1)}")
+            print(f"Processing batch {int(i / self.batch_size + 1)} of {int(len(X) / self.batch_size + 1)}")
             j = min(i + self.batch_size, len(X))
-            res.append(self.process_batch(X[i:j]))
+            n_windows, p_i, p_ij = self.process_batch(X[i:j])
+            wds += n_windows
+            p_is += p_i
+            p_ijs += p_ij
             i = j
-        wdws, p_is, p_ijs = zip(*res)
-        p_i = sum(p_is) / sum(wdws)
-        p_ij = sum(p_ijs) / sum(wdws)
+
+        p_i = sum(p_is) / sum(wds)
+        p_ij = sum(p_ijs) / sum(wds)
         idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
         p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
         idx_nonzero = th.nonzero(p_ij > 0)
