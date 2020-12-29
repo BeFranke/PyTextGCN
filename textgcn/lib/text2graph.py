@@ -5,11 +5,13 @@ from typing import Union, Dict, List, Tuple
 import pickle
 import joblib as jl
 import torch as th
+import numpy as np
 import torch_geometric as tg
 from nltk import RegexpTokenizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import time
+from clib.graphbuilder import compute_word_word_edges
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
@@ -46,6 +48,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         n_docs, n_vocabs = occurrence_mat.shape
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
+        X = self.encode_input(X)
         # build the graph
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
@@ -54,11 +57,14 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
 
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
-        edge_ww_weights, edges_coo = self.process_batches(X)
+        edges_coo, edge_ww_weights = compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_,
+                                                             self.window_size, self.n_jobs, self.batch_size)
+
+        edges_coo, edge_ww_weights = th.from_numpy(edges_coo), th.from_numpy(edge_ww_weights)
 
         edge_weights = th.cat([
-            tfidf_mat[tuple(docu_coo.T)],
-            edge_ww_weights
+            edge_ww_weights,
+            tfidf_mat[tuple(docu_coo.T)]
         ])
         coo = th.vstack([edges_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
         # id-matrix of size n_vocab + n_docs
@@ -95,87 +101,17 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 ]
             )(doc) for doc in X
         )
-        max_sent_len = max(map(len, X))
-        enc = jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_, max_sent_len) for sent in X
-        )
-
-        return th.stack(enc)
-
-    def encode_sentence(self, n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
-        enc = th.zeros(n_vocabs, max_sent_len)
-        for i, tok in enumerate(sent):
-            enc[mapping[tok], i] += 1
+        self.max_sent_len_ = max(map(len, X))
+        enc = np.stack(jl.Parallel(n_jobs=self.n_jobs)(
+            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_, self.max_sent_len) for sent in X
+        ))
 
         return enc
 
-    def pmi_and_edges(self, X: th.Tensor) -> Tuple[int, th.Tensor, th.Tensor]:
-        """
-        calculates pmi scores and edges
-        :param X: 3d tensor of shape (
-        :return:
-        """
-        # set device
-        device = th.device('cuda' if th.cuda.is_available() else 'cpu')
-        # conv synonym
-        conv = th.nn.functional.conv1d
-        # dispatch input tensor to GPU if available
-        inp = X.to(device)
-        # regular summation means all conv-weights are 1
-        weights = th.ones((self.n_vocabs_, 1, self.window_size)).to(device)
-        # convolution as window-summation
-        res: th.Tensor = conv(inp, weights, groups=self.n_vocabs_)
-        # binarize result and cast to float, because mean only works on float tensors
-        res = (res > 0).float().cpu()
-        n_windows = res.shape[1]
-        # get rid of minibatch dimension (a.k.a document dimension)
-        res = th.cat(tuple(res), dim=1)
-        # we now have
-        p_i = th.sum(res, dim=1)
+    def encode_sentence(self, n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
+        enc = np.empty(n_vocabs, max_sent_len, dtype=np.int32)
+        enc[:] = -1
+        for i, tok in enumerate(sent):
+            enc[i] = mapping[tok]
 
-        # idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
-        # p_ij contains how often a pair of words occured in the same window, indexed by idx
-        # p_ij = th.sum(th.prod(res[idx, :], dim=1), dim=1)
-        # p_ij = th.zeros(self.n_vocabs_ ** 2)
-        # i = 0
-        # for id in idx:
-        # for id in itertools.product(range(self.n_vocabs_), range(self.n_vocabs_)):
-        #     print(f"\r{i:10} of {self.n_vocabs_ ** 2}", end="")
-        #     p_ij[i] += th.sum(th.prod(res[id, :], dim=0), dim=0)
-        #     i += 1
-        # print()
-        p_ij = th.FloatTensor(jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(
-                lambda id: th.sum(th.prod(res[id, :], dim=0), dim=0)
-            )(id) for id in itertools.product(range(self.n_vocabs_), range(self.n_vocabs_))
-        ))
-
-        # p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
-        # idx_nonzero = th.nonzero(p_ij > 0)
-
-        return n_windows, p_i, p_ij
-
-    def process_batch(self, X):
-        X = self.encode_input(X)
-        return self.pmi_and_edges(X)
-
-    def process_batches(self, X):
-        i = 0
-        wds = 0
-        p_is = th.zeros(self.n_vocabs_)
-        p_ijs = th.zeros(self.n_vocabs_ ** 2)
-        while i < len(X):
-            print(f"Processing batch {int(i / self.batch_size + 1)} of {int(len(X) / self.batch_size + 1)}")
-            j = min(i + self.batch_size, len(X))
-            n_windows, p_i, p_ij = self.process_batch(X[i:j])
-            wds += n_windows
-            p_is += p_i
-            p_ijs += p_ij
-            i = j
-
-        p_i = sum(p_is) / sum(wds)
-        p_ij = sum(p_ijs) / sum(wds)
-        idx = th.cartesian_prod(th.arange(self.n_vocabs_, dtype=th.long), th.arange(self.n_vocabs_, dtype=th.long))
-        p_ij = th.log(p_ij / th.prod(p_i[idx], dim=1))
-        idx_nonzero = th.nonzero(p_ij > 0)
-        return p_ij[idx_nonzero], idx[idx_nonzero]
+        return enc

@@ -42,22 +42,24 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     memset(c_ij, 0, sizeof(unsigned int) * SymMatSize_Diag(n_vocab))
     cdef unsigned int n_windows
     cdef WeightedEdges* we
-    cdef int edge_dims[2]
-    cdef int weight_dims[1]
+    cdef np.npy_intp edge_dims[2]
+    cdef np.npy_intp weight_dims[1]
 
 
     # apply sliding window
     n_windows = sliding_window(&X[0, 0], c_ij, window_size, n_vocab, n_documents,
                                                  seq_len, n_jobs)
 
+    print("Sliding window was applied")
+
     # compute edges from the sliding window counts
     we = edges_from_counts(c_ij, n_vocab, n_windows)
 
     edge_dims = [we.n_edges, 2]
     weight_dims = [we.n_edges]
-
-    return np.PyArray_SimpleNewFromData(2, edge_dims, np.float32, we.coo), \
-           np.PyArray_SimpleNewFromData(1, weight_dims, np.int32, we.weights)
+    print(f"n_edges is {we.n_edges}")
+    return np.PyArray_SimpleNewFromData(2, edge_dims, np.NPY_UINT32, we.coo), \
+           np.PyArray_SimpleNewFromData(1, weight_dims, np.NPY_FLOAT32, we.weights)
 
 
 
@@ -83,10 +85,10 @@ cdef unsigned int sliding_window(const int* X, unsigned int* c_ij, unsigned int 
     cdef unsigned int k
     cdef unsigned int l
     cdef unsigned int n_windows = 0
+    cdef unsigned int idx1
+    cdef unsigned int idx2
     for i in range(n_documents):
         # this is the document loop
-        # TODO check if there is any sensible way to parallelize this
-        # TODO if not its not tragical, on Amazon 40k this takes ~10s
         for j in range(seq_len - window_size + 1):
             # this is the start of the sliding window
             if X[i * seq_len + j + window_size - 1] == -1 and j != 0:
@@ -100,7 +102,9 @@ cdef unsigned int sliding_window(const int* X, unsigned int* c_ij, unsigned int 
                     # this loop is for the pairwise counts
                     # this if needs to stay here, for the case that sliding window > sequence length, j == 0
                     if X[i * seq_len + k] != -1 and X[i * seq_len + l] != -1:
-                        uint_SymMat_Inc_Diag(i, j, n_vocab, c_ij)
+                        idx1 = X[i * seq_len + k]
+                        idx2 = X[i * seq_len + l]
+                        c_ij[SymMat_Diag_idx(idx1, idx2, n_vocab)] += 1
                     else:
                         break
 
@@ -129,30 +133,35 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     cdef unsigned int n_edges = 0
     cdef unsigned int* edges
     cdef float* weights
+    print("init block complete")
 
     # compute p_i, c_i values are the main diagonal of c_ij
     for i in range(n_vocab):
-        p[i] = <float>c_ij[i * n_vocab + i] / <float>n_windows
+        p[i] = <float>c_ij[SymMat_Diag_idx(i, i, n_vocab)] / <float>n_windows
+
+    print("p_i computed")
 
     # trying to save space by computing p_ij on demand and only saving the value when there is an edge.
     for i in range(n_vocab - 1):
         # we only need to iterate the upper triangle without main diagonal
         for j in range(i + 1, n_vocab):
-            p_ij = <float>uint_SymMat_Get_Diag(i, j, n_vocab, c_ij) / <float>n_windows
+            # p_ij = <float>uint_SymMat_Get_Diag(i, j, n_vocab, c_ij) / <float>n_windows
+            p_ij = <float> c_ij[SymMat_Diag_idx(i, j, n_vocab)] / <float> n_windows
             if p_ij == 0 or p[i] == 0 or p[j] == 0:
                 # log or division would cause error
-                float_SymMat_Set_NoDiag(i, j, n_vocab, edge_field, 0)
+                # float_SymMat_Set_NoDiag(i, j, n_vocab, edge_field, 0)
+                edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = 0
                 continue
             pmi = log(p_ij / (p[i] * p[j]))
             if pmi > 0:
                 # edge_field[edge_num] = pmi
-                float_SymMat_Set_NoDiag(i, j, n_vocab, edge_field, pmi)
+                edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = pmi
                 n_edges += 1
-
+    print("pij computed")
     # p and c_ij are no longer needed
     PyMem_Free(p)
     PyMem_Free(c_ij)
-
+    print("free")
     # don't forget self.loops and symmetric edges
     n_edges = n_edges * 2 + n_vocab
 
@@ -162,15 +171,19 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     k = 0
     for i in range(n_vocab - 1):
         for j in range(i + 1, n_vocab):
-            if float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field) > 0:
+            #if float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field) > 0:
+            if edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] > 0:
                 edges[2 * k] = i
                 edges[2 * k + 1] = j
-                weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
+                # weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
+                weights[k] = edge_field[SymMat_NoDiag_idx(i, j, n_vocab)]
                 k += 1
                 edges[2 * k] = j
                 edges[2 * k + 1] = i
-                weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
+                # weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
+                weights[k] = edge_field[SymMat_NoDiag_idx(i, j, n_vocab)]
 
+    print("edges converted to coo")
     # diag matrix no longer needed
     PyMem_Free(edge_field)
 
@@ -187,117 +200,28 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     return result
 
 ##### HELPER FUNCTIONS #####
-cdef float float_SymMat_Get_Diag(unsigned int row, unsigned int col, unsigned int N, float* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    if row > col:
-        return mat[<int>(row * N - (row - 1) * row / 2 + col - row)]
-    else:
-        return mat[<int>(row * N - (row - 1) * row / 2 + col - row)]
-
-cdef void float_SymMat_Set_Diag(unsigned int row, unsigned int col, unsigned int N, float* mat, float e):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    if row > col:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] = e
-    else:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] = e
-
-cdef void float_SymMat_Inc_Diag(unsigned int row, unsigned int col, unsigned int N, float* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    if row > col:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] += 1
-    else:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] += 1
-
-cdef float float_SymMat_Get_NoDiag(unsigned int row, unsigned int col, unsigned int N, float* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
+cdef unsigned int SymMat_Diag_idx(unsigned int row, unsigned int col, unsigned int N):
     if row >= col:
-        return mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)]
+        return col * N + row - <unsigned int>((col + 1) * col / 2)
     else:
-        return mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)]
+        return row * N + col - <unsigned int>((row + 1) * row / 2)
 
-cdef void float_SymMat_Set_NoDiag(unsigned int row, unsigned int col, unsigned int N, float* mat, float e):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
-    if row >= col:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] = e
-    else:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] = e
-
-cdef void float_SymMat_Inc_NoDiag(unsigned int row, unsigned int col, unsigned int N, float* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
-    if row >= col:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] += 1
-    else:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] += 1
-
-cdef unsigned int uint_SymMat_Get_Diag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
+cdef unsigned int SymMat_NoDiag_idx(unsigned int row, unsigned int col, unsigned int N):
+    assert row != col       # diagonal doesn't exist here
     if row > col:
-        return mat[<int>(row * N - (row - 1) * row / 2 + col - row)]
+        return col * N + row - <unsigned int>((col + 1) * col / 2) - col
     else:
-        return mat[<int>(row * N - (row - 1) * row / 2 + col - row)]
-
-cdef void uint_SymMat_Set_Diag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat, unsigned int e):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    if row > col:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] = e
-    else:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] = e
-
-cdef void uint_SymMat_Inc_Diag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    if row > col:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] += 1
-    else:
-        mat[<int>(row * N - (row - 1) * row / 2 + col - row)] += 1
-
-cdef unsigned int uint_SymMat_Get_NoDiag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
-    if row >= col:
-        return mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)]
-    else:
-        return mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)]
-
-cdef void uint_SymMat_Set_NoDiag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat, unsigned int e):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
-    if row >= col:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] = e
-    else:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] = e
-
-cdef void uint_SymMat_Inc_NoDiag(unsigned int row, unsigned int col, unsigned int N, unsigned int* mat):
-    # taken from
-    # https://www.codeguru.com/cpp/cpp/algorithms/general/article.php/c11211/TIP-Half-Size-Triangular-Matrix.htm
-    assert row != col
-    if row >= col:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] += 1
-    else:
-        mat[<int>(row * (N - 1) - (row - 1) * row / 2 + col - row - 1)] += 1
+        return row * N + col - <unsigned int>((row + 1) * row / 2) - row
 
 cdef unsigned int SymMatSize_Diag(unsigned int N):
-    return <unsigned int> ((N * (N - 1)) / 2)
+    return <unsigned int> ((N * (N + 1)) / 2)
 
 cdef unsigned int SymMatSize_NoDiag(unsigned int N):
-    return <unsigned int> ((N * (N - 1)) / 2 - N)
+    return <unsigned int> ((N * (N + 1)) / 2 - N)
 
 
 ##### FUNCTIONS BELOW ARE ONLY FOR TESTING #####
-cpdef unsigned int[:, ::1] sliding_window_tester(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
+cpdef unsigned int[::1] sliding_window_tester(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
                                                  unsigned int seq_len, unsigned int window_size = 20,
                                                  unsigned int n_jobs = 1):
     """
@@ -313,11 +237,27 @@ cpdef unsigned int[:, ::1] sliding_window_tester(int[:, ::1] X, unsigned int n_v
     :return: c_ij containing pairwise counts 
     """
     # init block
-    cdef unsigned int[:, ::1] c_ij = np.zeros((n_vocab, n_vocab), dtype=np.uint32)
+    cdef unsigned int[::1] c_ij = np.zeros(SymMatSize_Diag(n_vocab), dtype=np.uint32)
     # apply sliding window
-    cdef unsigned int n_windows = sliding_window(&X[0, 0], &c_ij[0, 0], window_size, n_vocab, n_documents,
+    cdef unsigned int n_windows = sliding_window(&X[0, 0], &c_ij[0], window_size, n_vocab, n_documents,
                                                  seq_len, n_jobs)
-    # abuse the result object to return intermediate results
-    # res.edges_coo = np.asarray(c_ij, dtype=np.float32)
-    # res.edge_weights = np.asarray(c_i, dtype=np.float32)
+
     return c_ij
+
+cpdef short test_sym_matrix():
+    cdef float mat[10]       # simulate 4 x 4 matrix
+    memset(mat, 0, sizeof(float) * 10)
+
+    mat[SymMat_Diag_idx(1, 1, 4)] = 10
+    mat[SymMat_Diag_idx(1, 2, 4)] = 20
+    mat[SymMat_Diag_idx(2, 0, 4)] = 30
+    mat[SymMat_Diag_idx(3, 3, 4)] = 100
+    mat[SymMat_Diag_idx(2, 3, 4)] = 120
+
+    expected = [0, 0, 30, 0, 10, 20, 0, 0, 120, 100]
+    result = 1
+    for i in range(6):
+        result &= mat[i] == expected[i]
+        print(f"expected {expected[i]}, got {mat[i]}")
+
+    return result
