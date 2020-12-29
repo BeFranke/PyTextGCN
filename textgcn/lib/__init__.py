@@ -1,4 +1,4 @@
 from .text2graph import *
 from .clib.graphbuilder import *
 
-__all__ = [Text2GraphTransformer, compute_graph_structure, sliding_window_tester]
+__all__ = [Text2GraphTransformer, compute_word_word_edges, sliding_window_tester]

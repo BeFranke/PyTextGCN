@@ -47,17 +47,15 @@ class TestGraphBuilder(TestCase):
             [ 0,  1,  2,  3,  4, -1, -1, -1],
             [ 5,  3,  4,  1,  2,  0,  5,  1]
         ], dtype=np.int32)
-        expected_ci = np.array([4, 6, 6, 4, 4, 3])
         expected_cij = np.array([
-            [8,  3,  3, 0, 0, 2],
-            [3, 12,  4, 2, 2, 1],
-            [3,  4, 12, 2, 2, 1],
-            [0,  2,  2, 8, 3, 1],
-            [0,  2,  2, 3, 8, 1],
-            [2,  1,  1, 1, 1, 6],
+            [4,  3,  3, 0, 0, 2],
+            [3,  6,  4, 2, 2, 1],
+            [3,  4,  6, 2, 2, 1],
+            [0,  2,  2, 4, 3, 1],
+            [0,  2,  2, 3, 4, 1],
+            [2,  1,  1, 1, 1, 3],
         ])
 
-        actual_ci, actual_cij = sliding_window_tester(X, 6, 2, 8, window_size=3)
+        actual_cij = sliding_window_tester(X, 6, 2, 8, window_size=3)
 
-        np.testing.assert_equal(expected_ci, actual_ci)
         np.testing.assert_equal(expected_cij, actual_cij)
