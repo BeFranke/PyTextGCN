@@ -23,7 +23,7 @@ test_idx = np.random.choice(len(x), int(0.1 * len(x)), replace=False)
 train_idx = np.array([x for x in range(len(x)) if x not in test_idx])
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, word_threshold=10, save_path=save_path, verbose=1, max_df=1.0)
+t2g = Text2GraphTransformer(n_jobs=8, word_threshold=5, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx)
