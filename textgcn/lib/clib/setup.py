@@ -1,7 +1,6 @@
 import numpy
 from setuptools import setup, Extension
 from Cython.Build import cythonize
-import distutils
 
 extensions = [
     Extension("graphbuilder", ["graphbuilder.pyx"],

@@ -41,20 +41,23 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
-                 n_jobs: int = 1, max_df=1.0, verbose=0):
+    def __init__(self, min_df: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
+                 n_jobs: int = 1, max_df=1.0, verbose=0, rm_stopwords=True):
+        self.rm_stopwords = rm_stopwords
         self.verbose = verbose
         self.max_df = max_df
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
-        assert word_threshold > 0
-        self.word_threshold = word_threshold
+        assert min_df > 0
+        self.min_df = min_df
         self.save_path = save_path
         self.input = None
         self.cv = None
         self.window_size = window_size
-        nltk.download('stopwords')
-        self.stop_words = set(nltk.corpus.stopwords.words('english'))
+        self.stop_words = None
+        if self.rm_stopwords:
+            nltk.download('stopwords')
+            self.stop_words = set(nltk.corpus.stopwords.words('english'))
 
     def fit_transform(self, X, y=None, test_idx=None, **fit_params):
         th.set_grad_enabled(False)
@@ -73,7 +76,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 with open(f, 'r') as fp:
                     self.input.append(fp.read())
         # pre-process the text
-        self.cv = CountVectorizer(stop_words=self.stop_words, min_df=self.word_threshold, max_df=self.max_df)
+        self.cv = CountVectorizer(stop_words=self.stop_words, min_df=self.min_df, max_df=self.max_df)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
         n_docs, n_vocabs = occurrence_mat.shape
         if self.verbose > 1:
@@ -90,6 +93,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         # build word-document edges
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
+        # edge from i to j also means edge from j to i
+        docu_coo_sym = th.flip(docu_coo, dims=[1])
 
         if self.verbose > 0:
             print(f"building word-word.edges...")
@@ -103,9 +108,14 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         edge_weights = th.cat([
             edge_ww_weights,
+            tfidf_mat[tuple(docu_coo.T)],
             tfidf_mat[tuple(docu_coo.T)]
         ])
-        coo = th.vstack([edges_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
+        coo = th.vstack([
+            edges_coo,
+            docu_coo + th.Tensor([n_vocabs, 0]),
+            docu_coo_sym + th.Tensor([0, n_vocabs])
+        ]).long()
 
         if self.verbose > 0:
             print(f"total edge shape is {coo.shape}")
@@ -136,3 +146,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         with open(save_path, "rb") as fp:
             g = pickle.load(fp)
         return g
+
+    @property
+    def vocabulary(self):
+        return self.cv.vocabulary_
