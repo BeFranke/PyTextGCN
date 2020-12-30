@@ -161,10 +161,12 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # DONE by making this sparse we could save 2 GB of RAM
         # node_feats = th.eye(n_docs + n_vocabs)
         node_feats = self.node_feats() if self.sparse_features else th.eye(self.n_nodes_)
-
+        doc_idx = th.zeros(self.n_nodes_, dtype=th.bool)
+        doc_idx[th.arange(self.n_vocabs_, self.n_nodes_)] = 1
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
                          train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
+                         doc_idx=doc_idx,
                          n_vocab=n_vocabs)
 
         if self.save_path is not None:
