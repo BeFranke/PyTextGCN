@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder
 import os
 
 CPU_ONLY = True
-EARLY_STOPPING = True
+EARLY_STOPPING = False
 
 train = pd.read_csv("data/amazon/train_40k.csv")
 # save_path="textgcn/graphs/"
@@ -23,7 +23,7 @@ test_idx = np.random.choice(len(x), int(0.1 * len(x)), replace=False)
 train_idx = np.array([x for x in range(len(x)) if x not in test_idx])
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, word_threshold=5, save_path=save_path, verbose=1)
+t2g = Text2GraphTransformer(n_jobs=8, word_threshold=10, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx)
@@ -58,8 +58,8 @@ for epoch in range(epochs):
         break
     gcn.eval()
     with th.no_grad():
-        predictions = np.argmax(gcn(g)[g.test_idx].cpu().detach().numpy(), axis=1)
-        pred_train = np.argmax(gcn(g)[g.train_idx].cpu().detach().numpy(), axis=1)
+        predictions = np.argmax(gcn(g)[g.test_idx].cpu().numpy(), axis=1)
+        pred_train = np.argmax(gcn(g)[g.train_idx].cpu().numpy(), axis=1)
         acc = accuracy_score(g.y.cpu()[test_idx].detach(), predictions)
         acc_train = accuracy_score(g.y.cpu()[train_idx].detach(), pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "

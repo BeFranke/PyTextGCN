@@ -8,7 +8,7 @@ import joblib as jl
 import numpy as np
 import torch as th
 import torch_geometric as tg
-from nltk import RegexpTokenizer
+import nltk
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from tqdm.asyncio import tqdm
@@ -22,7 +22,7 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
     X = jl.Parallel(n_jobs=n_jobs)(
         jl.delayed(
             lambda doc: [
-                x.lower() for x in RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in vocabulary
+                x.lower() for x in nltk.RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in vocabulary
             ]
         )(doc) for doc in tqdm(X)
     )
@@ -54,6 +54,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.input = None
         self.cv = None
         self.window_size = window_size
+        nltk.download('stopwords')
+        self.stop_words = set(nltk.corpus.stopwords.words('english'))
 
     def fit_transform(self, X, y=None, test_idx=None, **fit_params):
         th.set_grad_enabled(False)
@@ -72,7 +74,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 with open(f, 'r') as fp:
                     self.input.append(fp.read())
         # pre-process the text
-        self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold, max_df=self.max_df)
+        self.cv = CountVectorizer(stop_words=self.stop_words, min_df=self.word_threshold, max_df=self.max_df)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
         n_docs, n_vocabs = occurrence_mat.shape
         if self.verbose > 1:
@@ -93,12 +95,12 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         if self.verbose > 0:
             print(f"building word-word.edges...")
 
-        # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
-        edges_coo, edge_ww_weights = compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_,
-                                                             self.window_size, self.n_jobs, self.batch_size,
-                                                             self.verbose)
-
-        edges_coo, edge_ww_weights = th.from_numpy(edges_coo), th.from_numpy(edge_ww_weights)
+        # call compute_word_word_edges and map the two resulting numpy arrays to torch
+        edges_coo, edge_ww_weights = map(
+            th.from_numpy,
+            compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_, self.window_size,
+                                    self.n_jobs, self.batch_size, self.verbose)
+        )
 
         edge_weights = th.cat([
             edge_ww_weights,
@@ -110,6 +112,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             print(f"total edge shape is {coo.shape}")
 
         # id-matrix of size n_vocab + n_docs
+        # TODO by making this sparse we could save 2 GB of RAM
         node_feats = th.eye(n_docs + n_vocabs)
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
@@ -134,6 +137,3 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         with open(save_path, "rb") as fp:
             g = pickle.load(fp)
         return g
-
-
-

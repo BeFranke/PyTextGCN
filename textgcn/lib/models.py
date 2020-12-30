@@ -32,7 +32,7 @@ class GCN(nn.Module):
         super(GCN, self).__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.graph_layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=False)])
+        self.graph_layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
         for i in range(n_gcn - 2):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
         self.graph_layers.append(GCNConv(n_hidden_gcn, out_channels))

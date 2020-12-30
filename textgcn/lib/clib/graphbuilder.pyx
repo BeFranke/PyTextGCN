@@ -175,7 +175,7 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     if verbose > 1:
         print("free")
     # don't forget self-loops and symmetric edges
-    n_edges = n_edges * 2 + n_vocab
+    n_edges = n_edges * 2 # + n_vocab   # add n_vocab if self-loops need to be added manually
 
     # extract the edges and weights into a fixed size memory region
     edges = <int*> PyMem_Malloc(sizeof(int) * 2 * n_edges)
@@ -199,13 +199,14 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     # diag matrix no longer needed
     PyMem_Free(edge_field)
 
+    # we explicitly do not add self-loops, as GCN does that already
     # add self-loops
-    i = 0
-    for k in range(k, n_edges):
-        edges[2 * k] = i
-        edges[2 * k + 1] = i
-        weights[k] = 1
-        i += 1
+    # i = 0
+    # for k in range(k, n_edges):
+    #    edges[2 * k] = i
+    #    edges[2 * k + 1] = i
+    #    weights[k] = 1
+    #    i += 1
 
     result.weights = weights
     result.coo = edges
