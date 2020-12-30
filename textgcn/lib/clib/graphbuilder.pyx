@@ -73,7 +73,7 @@ cdef unsigned int sliding_window(const int* X, unsigned int* c_ij, unsigned int 
     """
     applies sliding window and computes c_ij
     SIDE EFFECT: modifies c_ij
-    :param X: input, not modified, as in compute_graph_structure
+    :param X: input as in compute_graph_structure
     :param c_ij: pointer to word-pair count array to fill (size SymMatSizeDiag(n_vocab))
     :param n_vocab: vocabulary size in the input
     :param n_documents: number of documents in the input

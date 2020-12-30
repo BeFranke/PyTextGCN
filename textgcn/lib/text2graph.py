@@ -2,7 +2,7 @@ import glob
 import os
 import pickle
 import time
-from typing import Union
+from typing import Union, List, Dict
 
 import joblib as jl
 import numpy as np
@@ -12,6 +12,7 @@ import nltk
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from tqdm.asyncio import tqdm
+from scipy import sparse as sp
 
 from .clib.graphbuilder import compute_word_word_edges
 
@@ -42,7 +43,23 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, min_df: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
-                 n_jobs: int = 1, max_df=1.0, verbose=0, rm_stopwords=True):
+                 n_jobs: int = 1, max_df=1.0, verbose=0, rm_stopwords=True, sparse_features=True):
+        """
+        sklearn-module that transforms a text corpus into a graph, according to the algorithm specified by
+        Yao et al, Graph Convolutional Networks for Text Classification (2018), https://arxiv.org/abs/1809.05679.
+        :param min_df: Minimum word frequency for the word to be included, can be float (relative frequency)
+                        or int (absolute frequency)
+        :param window_size: Size of the sliding window. Bigger values mean more edges in the graph.
+        :param save_path: Path to save the graph to, optional
+        :param n_jobs: number of parallel workers. Currently only used for text preprocessing
+        :param max_df: maximum word frequency, similar to min_df
+        :param verbose: [0, 1, 2], higher means more debug output
+        :param rm_stopwords: weather to remove common words that do not contain much information from the text.
+                            currently, nltk is used for this.
+        :param sparse_features: if True, feature matrix is computed as sparse. This can save a lot of RAM and GPU memory
+                                during training but can only be used if the neural net can handle sparse matrices
+        """
+        self.sparse_features = sparse_features
         self.rm_stopwords = rm_stopwords
         self.verbose = verbose
         self.max_df = max_df
@@ -59,7 +76,26 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             nltk.download('stopwords')
             self.stop_words = set(nltk.corpus.stopwords.words('english'))
 
-    def fit_transform(self, X, y=None, test_idx=None, **fit_params):
+    def fit_transform(self, X: Union[List[str], str],
+                      y: Union[th.Tensor, np.ndarray, List[int], None] = None,
+                      test_idx: Union[th.Tensor, np.ndarray, List[int], None] = None) -> tg.data.Data:
+        """
+        transform input corpus into a torch_geometric Data-object (a graph)
+        :param X: corpus, can either be:
+                    - List[str], the each list entry is taken as a document (recommended input format)
+                    - str, then the string is interpreted as a path towards a folder, all .txt-files found inside the
+                      folder are taken as documents
+        :param y: list of labels, shape (len(x),)
+        :param test_idx: this parameter can tell the downstream neural net which nodes should be used for testing
+        :return: the resulting graph as tg.Data object with attributes:
+                - x: Node features, shape (n_nodes_, n_nodes_) (MAY BE SPARSE!)
+                - y: Node labels, shape (n_nodes_,)
+                - edge_index: Adjacency in COO format, shape (2, n_edges_)
+                - edge_attr: Edge weights, shape (n_edges,)
+                - test_idx: NODE (not document) indices that show which nodes should be used for testing
+                - train_idx: NODE (not document) indices that show which nodes should be used for training
+                - n_vocab: number of unique words in the vocabulary (also, the lowest document-node index)
+        """
         th.set_grad_enabled(False)
         if not isinstance(test_idx, th.Tensor):
             test_idx = th.Tensor(test_idx)
@@ -84,6 +120,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             print(f"Vocabulary size: {n_vocabs}")
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
+        self.n_nodes_ = n_docs + n_vocabs
         X, self.max_sent_len_ = _encode_input(X, self.n_jobs, self.cv.vocabulary_, self.verbose, self.n_docs_)
         # build the graph
         if self.verbose > 0:
@@ -121,8 +158,10 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             print(f"total edge shape is {coo.shape}")
 
         # id-matrix of size n_vocab + n_docs
-        # TODO by making this sparse we could save 2 GB of RAM
-        node_feats = th.eye(n_docs + n_vocabs)
+        # DONE by making this sparse we could save 2 GB of RAM
+        # node_feats = th.eye(n_docs + n_vocabs)
+        node_feats = self.node_feats() if self.sparse_features else th.eye(self.n_nodes_)
+
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
                          test_idx=(n_vocabs + test_idx).long(),
                          train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
@@ -141,6 +180,11 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
     @staticmethod
     def load_graph(save_path):
+        """
+        loads a graph from file
+        :param save_path: path to file
+        :return: graph as in fit_transform
+        """
         if not os.path.exists(save_path):
             raise FileNotFoundError("Given file does not exist!")
         with open(save_path, "rb") as fp:
@@ -148,5 +192,20 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         return g
 
     @property
-    def vocabulary(self):
+    def vocabulary(self) -> Dict[str, int]:
+        """
+        :return: mapping of word to vocabulary-index
+        """
         return self.cv.vocabulary_
+
+    def node_feats(self):
+        """
+        computes sparse feature matrix
+        :return sparse feature matrix
+        """
+        # inspired by:
+        # https://kenqgu.com/classifying-asian-prejudice-in-tweets-during-covid-19-using-graph-convolutional-networks/
+        identity = sp.identity(self.n_nodes_)
+        ind0, ind1, vals = sp.find(identity)
+        inds = th.stack((th.from_numpy(ind0), th.from_numpy(ind1)))
+        return th.sparse_coo_tensor(inds, vals, device=th.device("cpu"), dtype=th.float)
