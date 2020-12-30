@@ -42,9 +42,8 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
-                 n_jobs: int = 1, max_df=1.0, batch_size=400, verbose=0):
+                 n_jobs: int = 1, max_df=1.0, verbose=0):
         self.verbose = verbose
-        self.batch_size = batch_size
         self.max_df = max_df
         self.n_jobs = n_jobs
         # assert isinstance(stopwords, list) or stopwords in self.valid_stopwords
@@ -99,7 +98,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         edges_coo, edge_ww_weights = map(
             th.from_numpy,
             compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_, self.window_size,
-                                    self.n_jobs, self.batch_size, self.verbose)
+                                    self.n_jobs, self.verbose)
         )
 
         edge_weights = th.cat([

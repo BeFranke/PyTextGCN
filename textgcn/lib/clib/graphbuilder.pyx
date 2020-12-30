@@ -22,7 +22,7 @@ cdef float EPSILON = 1e-10
 ##### INTERFACE ######
 cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
                                     unsigned int seq_len, unsigned int window_size = 20,  unsigned int n_jobs = 1,
-                                    unsigned int batch_size = 400, unsigned int verbose=0):
+                                    unsigned int verbose=0):
     """
     bridge function that serves a a python-to-C entry for the graph computation
     :param X: input text, cleaned and (densely!) tokenized by CountVectorizer or similar, 
@@ -33,7 +33,6 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     :param window_size: size of sliding context window. Higher values capture long-range dependencies 
                         at the cost of short range dependencies
     :param n_jobs: (UNUSED) number of jobs for parallel processing. Higher = more RAM and CPU usage
-    :param batch_size: (UNUSED) batch size to work on. Higher = more RAM usage
     :param verbose: integer in range [0, 1, 2], higher means more debug output
     :return: Tuple of (coo, weights), where:
                 - coo is a memview of shape (n_edges, 2), dtype uint32
@@ -118,12 +117,12 @@ cdef unsigned int sliding_window(const int* X, unsigned int* c_ij, unsigned int 
 cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, unsigned int n_windows,
                                       unsigned int verbose):
     """
-    computes edges and edge weights from c_i and c_ij
+    computes edges and edge weights from c_ij
     SIDE EFFECTS: deallocates c_ij
-    :param c_ij: count matrix, shape (n_vocab, n_vocab)
+    :param c_ij: symmetric count matrix, shape (SymMatSizeDiag(n_vocab,))
     :param n_vocab: number of unique words
     :param n_windows: number of sliding windows used to compute c_ij 
-    :param verbose: higher = more debug
+    :param verbose: higher = more debug output
     :return: pointer to WeightedEdges struct containing coo-edges and their weights
     """
     # init block
@@ -153,16 +152,13 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     for i in range(n_vocab - 1):
         # we only need to iterate the upper triangle without main diagonal
         for j in range(i + 1, n_vocab):
-            # p_ij = <float>uint_SymMat_Get_Diag(i, j, n_vocab, c_ij) / <float>n_windows
             p_ij = <float> c_ij[SymMat_Diag_idx(i, j, n_vocab)] / <float> n_windows
             if p_ij == 0 or p[i] == 0 or p[j] == 0:
                 # log or division would cause error
-                # float_SymMat_Set_NoDiag(i, j, n_vocab, edge_field, 0)
                 edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = 0
                 continue
             pmi = log(p_ij / (p[i] * p[j]))
             if pmi > EPSILON:
-                # edge_field[edge_num] = pmi
                 edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = pmi
                 n_edges += 1
             else:
@@ -174,7 +170,7 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     PyMem_Free(c_ij)
     if verbose > 1:
         print("free")
-    # don't forget self-loops and symmetric edges
+    # don't forget self-loops
     n_edges = n_edges * 2 # + n_vocab   # add n_vocab if self-loops need to be added manually
 
     # extract the edges and weights into a fixed size memory region
@@ -186,12 +182,11 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
             if edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] > 0:
                 edges[2 * k] = i
                 edges[2 * k + 1] = j
-                # weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
                 weights[k] = edge_field[SymMat_NoDiag_idx(i, j, n_vocab)]
                 k += 1
+                # edges are symmetric, so we add the inverse edge too
                 edges[2 * k] = j
                 edges[2 * k + 1] = i
-                # weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
                 weights[k] = edge_field[SymMat_NoDiag_idx(i, j, n_vocab)]
                 k += 1
     if verbose > 1:
@@ -216,12 +211,28 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
 
 ##### HELPER FUNCTIONS #####
 cdef unsigned int SymMat_Diag_idx(unsigned int row, unsigned int col, unsigned int N):
+    """
+    computes the index to a 1D-array when that 1D-array is used to simulate a symmetric 2D matrix
+    of size (N x N) (including main diagonal) given the "simulated" indices (row, col)
+    :param row: 
+    :param col: 
+    :param N: 
+    :return: 
+    """
     if row >= col:
         return col * N + row - <unsigned int>((col + 1) * col / 2)
     else:
         return row * N + col - <unsigned int>((row + 1) * row / 2)
 
 cdef unsigned int SymMat_NoDiag_idx(unsigned int row, unsigned int col, unsigned int N):
+    """
+    computes the index to a 1D-array when that 1D-array is used to simulate a symmetric 2D matrix
+    of size (N x N) (excluding main diagonal) given the "simulated" indices (row, col)
+    :param row: 
+    :param col: 
+    :param N: 
+    :return: 
+    """
     assert row != col       # diagonal doesn't exist here
     if row > col:
         return col * N + row - <unsigned int>((col + 1) * col / 2) - col
@@ -229,9 +240,21 @@ cdef unsigned int SymMat_NoDiag_idx(unsigned int row, unsigned int col, unsigned
         return row * N + col - <unsigned int>((row + 1) * row / 2) - row
 
 cdef unsigned int SymMatSize_Diag(unsigned int N):
+    """
+    computes the size of an 1D array used to simulate a symmetric 2D matrix
+    of size (N x N) (including main diagonal)
+    :param N: 
+    :return: 
+    """
     return <unsigned int> ((N * (N + 1)) / 2)
 
 cdef unsigned int SymMatSize_NoDiag(unsigned int N):
+    """
+    computes the size of an 1D array used to simulate a symmetric 2D matrix
+    of size (N x N) (excluding main diagonal)
+    :param N: 
+    :return: 
+    """
     return <unsigned int> ((N * (N + 1)) / 2 - N)
 
 
@@ -260,6 +283,10 @@ cpdef unsigned int[::1] sliding_window_tester(int[:, ::1] X, unsigned int n_voca
     return c_ij
 
 cpdef short test_sym_matrix():
+    """
+    test function for the symmetric matrix functions
+    :return: 
+    """
     cdef float mat[10]       # simulate 4 x 4 matrix
     memset(mat, 0, sizeof(float) * 10)
 
