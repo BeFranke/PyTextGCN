@@ -11,12 +11,40 @@ from nltk import RegexpTokenizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 import time
-from clib.graphbuilder import compute_word_word_edges
+
+from tqdm.asyncio import tqdm
+
+from .clib.graphbuilder import compute_word_word_edges
+
+
+def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
+    if verbose > 1:
+        print("Tokenizing text and removing unwanted words...")
+    X = jl.Parallel(n_jobs=n_jobs)(
+        jl.delayed(
+            lambda doc: [
+                x.lower() for x in RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in vocabulary
+            ]
+        )(doc) for doc in tqdm(X)
+    )
+    max_sent_len = max(map(len, X))
+    if verbose > 0:
+        print(f"Sequence length is {max_sent_len}")
+    if verbose > 1:
+        print("Padding and encoding text...")
+    X = np.array(jl.Parallel(n_jobs=8)(
+        jl.delayed(
+            lambda doc: [vocabulary[w] for w in doc] + [-1] * (max_sent_len - len(doc))
+        )(doc) for doc in tqdm(X)
+    ), dtype=np.int32)
+    assert X.shape == (n_docs, max_sent_len)
+    return X, max_sent_len
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 15, save_path: str = None,
-                 n_jobs: int = 1, max_df=0.9, batch_size=400):
+                 n_jobs: int = 1, max_df=0.9, batch_size=400, verbose=0):
+        self.verbose = verbose
         self.batch_size = batch_size
         self.max_df = max_df
         self.n_jobs = n_jobs
@@ -38,6 +66,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         if isinstance(X, list):
             self.input = X
         else:
+            if self.verbose > 0:
+                print(f"Loading input from {X}")
             self.input = []
             for f in glob.glob(os.path.join(X, "*.txt")):
                 with open(f, 'r') as fp:
@@ -46,15 +76,24 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.cv = CountVectorizer(stop_words='english', min_df=self.word_threshold, max_df=self.max_df)
         occurrence_mat = self.cv.fit_transform(self.input).toarray()
         n_docs, n_vocabs = occurrence_mat.shape
+        if self.verbose > 1:
+            print(f"Number of documents in input: {n_docs}")
+            print(f"Vocabulary size: {n_vocabs}")
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
-        X = self.encode_input(X)
+        X, self.max_sent_len_ = _encode_input(X, self.n_jobs, self.cv.vocabulary_, self.verbose, self.n_docs_)
         # build the graph
         # memory-intensive solution: compute PMI and TFIDF matrices and store them
+        if self.verbose > 0:
+            print(f"Building doc-word edges...")
+
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
 
         # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
+
+        if self.verbose > 0:
+            print(f"building word-word.edges...")
 
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
         edges_coo, edge_ww_weights = compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_,
@@ -93,25 +132,5 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             g = pickle.load(fp)
         return g
 
-    def encode_input(self, X):
-        X = jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(
-                lambda doc: [
-                    x.lower() for x in RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in self.cv.vocabulary_
-                ]
-            )(doc) for doc in X
-        )
-        self.max_sent_len_ = max(map(len, X))
-        enc = np.stack(jl.Parallel(n_jobs=self.n_jobs)(
-            jl.delayed(self.encode_sentence)(self.n_vocabs_, sent, self.cv.vocabulary_, self.max_sent_len) for sent in X
-        ))
 
-        return enc
 
-    def encode_sentence(self, n_vocabs, sent, mapping: Dict[str, int], max_sent_len):
-        enc = np.empty(n_vocabs, max_sent_len, dtype=np.int32)
-        enc[:] = -1
-        for i, tok in enumerate(sent):
-            enc[i] = mapping[tok]
-
-        return enc

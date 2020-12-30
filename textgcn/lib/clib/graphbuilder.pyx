@@ -12,7 +12,7 @@ from libc.string cimport memset
 
 # helper struct
 cdef struct WeightedEdges:
-    unsigned int* coo
+    int* coo
     float* weights
     int n_edges
 
@@ -58,7 +58,7 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     edge_dims = [we.n_edges, 2]
     weight_dims = [we.n_edges]
     print(f"n_edges is {we.n_edges}")
-    return np.PyArray_SimpleNewFromData(2, edge_dims, np.NPY_UINT32, we.coo), \
+    return np.PyArray_SimpleNewFromData(2, edge_dims, np.NPY_INT32, we.coo), \
            np.PyArray_SimpleNewFromData(1, weight_dims, np.NPY_FLOAT32, we.weights)
 
 
@@ -131,7 +131,7 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     cdef float p_ij
     cdef float pmi
     cdef unsigned int n_edges = 0
-    cdef unsigned int* edges
+    cdef int* edges
     cdef float* weights
     print("init block complete")
 
@@ -166,7 +166,7 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     n_edges = n_edges * 2 + n_vocab
 
     # extract the edges and weights into a fixed size memory region
-    edges = <unsigned int*> PyMem_Malloc(sizeof(int) * 2 * n_edges)
+    edges = <int*> PyMem_Malloc(sizeof(int) * 2 * n_edges)
     weights = <float*> PyMem_Malloc(sizeof(int) * n_edges)
     k = 0
     for i in range(n_vocab - 1):

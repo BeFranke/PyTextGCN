@@ -7,7 +7,11 @@ from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 import os
 
+CPU_ONLY = True
+
 train = pd.read_csv("data/amazon/train_40k.csv")
+# save_path="textgcn/graphs/"
+save_path = None
 
 x_train = train['Text'].tolist()
 y_train = train['Cat1'].tolist()
@@ -23,19 +27,22 @@ test_idx = range(split_idx, len(x_train))
 
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=12, word_threshold=5, save_path="textgcn/graphs/", batch_size=200)
+t2g = Text2GraphTransformer(n_jobs=8, word_threshold=5, save_path=save_path, verbose=2)
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x_train, y_train, test_idx=test_idx)
 else:
     g = t2g.load_graph(os.path.join("textgcn/graphs", ls[0]))
-gcn = GCN(g.x.shape[1], len(np.unique(y_train)), n_hidden_gcn=300)
+
+print("Graph built")
+
+gcn = GCN(g.x.shape[1], len(np.unique(y_train)), n_hidden_gcn=64)
 
 epochs = 100
 criterion = th.nn.CrossEntropyLoss()
 optimizer = th.optim.Adam(gcn.parameters(), lr=0.01)
 
-device = th.device('cuda' if th.cuda.is_available() else 'cpu')
+device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 gcn = gcn.to(device).float()
 g = g.to(device)
 

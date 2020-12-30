@@ -2,6 +2,8 @@ from unittest import TestCase
 import pandas as pd
 from nltk import RegexpTokenizer
 from sklearn.feature_extraction.text import CountVectorizer
+from tqdm.asyncio import tqdm
+
 from textgcn.lib import sliding_window_tester, test_sym_matrix, compute_word_word_edges
 from datetime import datetime
 import joblib as jl
@@ -56,7 +58,7 @@ class TestGraphBuilder(TestCase):
                 lambda doc: [
                     x.lower() for x in RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in cv.vocabulary_
                 ]
-            )(doc) for doc in X
+            )(doc) for doc in tqdm(X)
         )
         max_sent_len = max(map(len, X))
         X = np.array(jl.Parallel(n_jobs=8)(
