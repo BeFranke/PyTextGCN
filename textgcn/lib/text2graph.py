@@ -92,8 +92,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 - y: Node labels, shape (n_nodes_,)
                 - edge_index: Adjacency in COO format, shape (2, n_edges_)
                 - edge_attr: Edge weights, shape (n_edges,)
-                - test_idx: NODE (not document) indices that show which nodes should be used for testing
-                - train_idx: NODE (not document) indices that show which nodes should be used for training
+                - test_mask: node bitmap showing which (document-)nodes should be used for testing
+                - train_idx: node bitmap showing which (document-)nodes should be used for training
                 - n_vocab: number of unique words in the vocabulary (also, the lowest document-node index)
         """
         th.set_grad_enabled(False)
@@ -161,12 +161,16 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # DONE by making this sparse we could save 2 GB of RAM
         # node_feats = th.eye(n_docs + n_vocabs)
         node_feats = self.node_feats() if self.sparse_features else th.eye(self.n_nodes_)
-        doc_idx = th.zeros(self.n_nodes_, dtype=th.bool)
-        doc_idx[th.arange(self.n_vocabs_, self.n_nodes_)] = 1
+        test_mask = th.zeros(self.n_nodes_, dtype=th.bool)
+        test_mask[test_idx + self.n_vocabs_] = 1
+        train_mask = th.logical_not(test_mask)
+        train_mask[:self.n_vocabs_] = 0
+        # TODO if we ever include unlabelled documents, this needs to change
+        doc_mask = train_mask + test_mask
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
-                         test_idx=(n_vocabs + test_idx).long(),
-                         train_idx=th.LongTensor([n_vocabs + i for i in range(n_docs) if i not in test_idx]),
-                         doc_idx=doc_idx,
+                         test_mask=test_mask,
+                         train_mask=train_mask,
+                         doc_mask=doc_mask,
                          n_vocab=n_vocabs)
 
         if self.save_path is not None:

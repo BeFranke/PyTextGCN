@@ -54,7 +54,7 @@ print("#### TRAINING START ####")
 for epoch, batch in enumerate(sampler):
     batch = batch.to(device)
     gcn.train()
-    outputs = gcn(g)[batch.train_idx]
+    outputs = gcn(g)[batch.train_mask]
     loss = criterion(outputs, g.y[train_idx])
     optimizer.zero_grad()
     loss.backward()
