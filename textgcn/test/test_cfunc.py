@@ -73,6 +73,7 @@ class TestGraphBuilder(TestCase):
         print(f"loading complete!. Took {time[1] - time[0]}")
         print("starting unit test...")
         result = compute_word_word_edges(X, n_vocab, n_documents, max_sent_len, n_jobs=8)
+        print(f"edge shape is {result[0].shape}")
         print(result)
         time.append(datetime.now())
         print(f"graph building took {time[2] - time[1]}")
@@ -105,5 +106,8 @@ class TestGraphBuilder(TestCase):
             [0, 1, 2, 3, 4, -1, -1, -1],
             [5, 3, 4, 1, 2, 0, 5, 1]
         ], dtype=np.int32)
+        coo, weights = compute_word_word_edges(X, 6, 2, 8, 3, verbose=2)
+        print(coo)
+        print(weights)
 
 

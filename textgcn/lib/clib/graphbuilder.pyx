@@ -16,11 +16,13 @@ cdef struct WeightedEdges:
     float* weights
     int n_edges
 
+# constant declaring which is the threshold for a pmi score to be considered "not zero"
+cdef float EPSILON = 1e-10
 
 ##### INTERFACE ######
 cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
                                     unsigned int seq_len, unsigned int window_size = 20,  unsigned int n_jobs = 1,
-                                    unsigned int batch_size = 400):
+                                    unsigned int batch_size = 400, unsigned int verbose=0):
     """
     bridge function that serves a a python-to-C entry for the graph computation
     :param X: input text, cleaned and (densely!) tokenized by CountVectorizer or similar, 
@@ -30,8 +32,9 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     :param seq_len: length of sequences
     :param window_size: size of sliding context window. Higher values capture long-range dependencies 
                         at the cost of short range dependencies
-    :param n_jobs: number of jobs for parallel processing. Higher = more RAM and CPU usage
-    :param batch_size: batch size to work on. Higher = more RAM usage
+    :param n_jobs: (UNUSED) number of jobs for parallel processing. Higher = more RAM and CPU usage
+    :param batch_size: (UNUSED) batch size to work on. Higher = more RAM usage
+    :param verbose: integer in range [0, 1, 2], higher means more debug output
     :return: Tuple of (coo, weights), where:
                 - coo is a memview of shape (n_edges, 2), dtype uint32
                 - weights is a memview of shape (n_edges,), dtype float32
@@ -49,15 +52,16 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     # apply sliding window
     n_windows = sliding_window(&X[0, 0], c_ij, window_size, n_vocab, n_documents,
                                                  seq_len, n_jobs)
-
-    print("Sliding window was applied")
+    if verbose > 1:
+        print("Sliding window was applied")
 
     # compute edges from the sliding window counts
-    we = edges_from_counts(c_ij, n_vocab, n_windows)
+    we = edges_from_counts(c_ij, n_vocab, n_windows, verbose)
 
     edge_dims = [we.n_edges, 2]
     weight_dims = [we.n_edges]
-    print(f"n_edges is {we.n_edges}")
+    if verbose > 1:
+        print(f"Number of word-word-edges: {we.n_edges}")
     return np.PyArray_SimpleNewFromData(2, edge_dims, np.NPY_INT32, we.coo), \
            np.PyArray_SimpleNewFromData(1, weight_dims, np.NPY_FLOAT32, we.weights)
 
@@ -111,13 +115,15 @@ cdef unsigned int sliding_window(const int* X, unsigned int* c_ij, unsigned int 
     return n_windows
 
 
-cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, unsigned int n_windows):
+cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, unsigned int n_windows,
+                                      unsigned int verbose):
     """
     computes edges and edge weights from c_i and c_ij
     SIDE EFFECTS: deallocates c_ij
     :param c_ij: count matrix, shape (n_vocab, n_vocab)
     :param n_vocab: number of unique words
     :param n_windows: number of sliding windows used to compute c_ij 
+    :param verbose: higher = more debug
     :return: pointer to WeightedEdges struct containing coo-edges and their weights
     """
     # init block
@@ -133,13 +139,15 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     cdef unsigned int n_edges = 0
     cdef int* edges
     cdef float* weights
-    print("init block complete")
+    if verbose > 1:
+        print("init block complete")
 
     # compute p_i, c_i values are the main diagonal of c_ij
     for i in range(n_vocab):
         p[i] = <float>c_ij[SymMat_Diag_idx(i, i, n_vocab)] / <float>n_windows
 
-    print("p_i computed")
+    if verbose > 1:
+        print("p_i computed")
 
     # trying to save space by computing p_ij on demand and only saving the value when there is an edge.
     for i in range(n_vocab - 1):
@@ -153,16 +161,20 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
                 edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = 0
                 continue
             pmi = log(p_ij / (p[i] * p[j]))
-            if pmi > 0:
+            if pmi > EPSILON:
                 # edge_field[edge_num] = pmi
                 edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = pmi
                 n_edges += 1
-    print("pij computed")
+            else:
+                edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] = 0
+    if verbose > 1:
+        print("pij computed")
     # p and c_ij are no longer needed
     PyMem_Free(p)
     PyMem_Free(c_ij)
-    print("free")
-    # don't forget self.loops and symmetric edges
+    if verbose > 1:
+        print("free")
+    # don't forget self-loops and symmetric edges
     n_edges = n_edges * 2 + n_vocab
 
     # extract the edges and weights into a fixed size memory region
@@ -171,7 +183,6 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     k = 0
     for i in range(n_vocab - 1):
         for j in range(i + 1, n_vocab):
-            #if float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field) > 0:
             if edge_field[SymMat_NoDiag_idx(i, j, n_vocab)] > 0:
                 edges[2 * k] = i
                 edges[2 * k + 1] = j
@@ -182,16 +193,19 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
                 edges[2 * k + 1] = i
                 # weights[k] = float_SymMat_Get_NoDiag(i, j, n_vocab, edge_field)
                 weights[k] = edge_field[SymMat_NoDiag_idx(i, j, n_vocab)]
-
-    print("edges converted to coo")
+                k += 1
+    if verbose > 1:
+        print("edges converted to coo")
     # diag matrix no longer needed
     PyMem_Free(edge_field)
 
     # add self-loops
+    i = 0
     for k in range(k, n_edges):
         edges[2 * k] = i
         edges[2 * k + 1] = i
         weights[k] = 1
+        i += 1
 
     result.weights = weights
     result.coo = edges

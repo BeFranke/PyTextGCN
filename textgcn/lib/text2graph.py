@@ -1,24 +1,23 @@
 import glob
-import itertools
 import os
-from typing import Union, Dict, List, Tuple
 import pickle
+import time
+from typing import Union
+
 import joblib as jl
-import torch as th
 import numpy as np
+import torch as th
 import torch_geometric as tg
 from nltk import RegexpTokenizer
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-import time
-
 from tqdm.asyncio import tqdm
 
 from .clib.graphbuilder import compute_word_word_edges
 
 
 def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
-    if verbose > 1:
+    if verbose > 0:
         print("Tokenizing text and removing unwanted words...")
     X = jl.Parallel(n_jobs=n_jobs)(
         jl.delayed(
@@ -28,9 +27,9 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
         )(doc) for doc in tqdm(X)
     )
     max_sent_len = max(map(len, X))
-    if verbose > 0:
-        print(f"Sequence length is {max_sent_len}")
     if verbose > 1:
+        print(f"Sequence length is {max_sent_len}")
+    if verbose > 0:
         print("Padding and encoding text...")
     X = np.array(jl.Parallel(n_jobs=8)(
         jl.delayed(
@@ -42,8 +41,8 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
 
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 15, save_path: str = None,
-                 n_jobs: int = 1, max_df=0.9, batch_size=400, verbose=0):
+    def __init__(self, word_threshold: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
+                 n_jobs: int = 1, max_df=1.0, batch_size=400, verbose=0):
         self.verbose = verbose
         self.batch_size = batch_size
         self.max_df = max_df
@@ -83,13 +82,12 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.n_vocabs_ = n_vocabs
         X, self.max_sent_len_ = _encode_input(X, self.n_jobs, self.cv.vocabulary_, self.verbose, self.n_docs_)
         # build the graph
-        # memory-intensive solution: compute PMI and TFIDF matrices and store them
         if self.verbose > 0:
             print(f"Building doc-word edges...")
 
         tfidf_mat = th.from_numpy(TfidfTransformer().fit_transform(occurrence_mat).todense())
 
-        # build word-document edges. The first value is increased by n_vocab, as documents start at index n_vocab
+        # build word-document edges
         docu_coo = th.nonzero(th.from_numpy(occurrence_mat))
 
         if self.verbose > 0:
@@ -97,7 +95,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
         # pmi_mat = self.pmi_matrix(n_docs, n_vocabs)
         edges_coo, edge_ww_weights = compute_word_word_edges(X, self.n_vocabs_, self.n_docs_, self.max_sent_len_,
-                                                             self.window_size, self.n_jobs, self.batch_size)
+                                                             self.window_size, self.n_jobs, self.batch_size,
+                                                             self.verbose)
 
         edges_coo, edge_ww_weights = th.from_numpy(edges_coo), th.from_numpy(edge_ww_weights)
 
@@ -106,6 +105,10 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
             tfidf_mat[tuple(docu_coo.T)]
         ])
         coo = th.vstack([edges_coo, docu_coo + th.Tensor([n_vocabs, 0])]).long()
+
+        if self.verbose > 0:
+            print(f"total edge shape is {coo.shape}")
+
         # id-matrix of size n_vocab + n_docs
         node_feats = th.eye(n_docs + n_vocabs)
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
