@@ -14,5 +14,18 @@ This project was built with:
 - scikit-learn 0.23.2
 - pytorch 1.7.0
 - torch-geometric 1.6.3
+- gcc 9.3.0
 
 At least the Text2Graph-module should work with other versions of these libraries, too.
+
+## Installation
+From the project root, the cython compilation can be done with:
+
+`cd textgcn/lib/clib && python setup.py build_ext --inplace`
+
+## Usage
+Either run `train.py` to reproduce our experiments or import the modules `textgcn.Text2GraphTransformer` 
+and/or `textgcn.GCN` into your own code. 
+
+## Documentation
+Currently resides in teh source files.
