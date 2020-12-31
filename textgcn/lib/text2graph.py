@@ -97,8 +97,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 - n_vocab: number of unique words in the vocabulary (also, the lowest document-node index)
         """
         th.set_grad_enabled(False)
-        if not isinstance(test_idx, th.Tensor):
-            test_idx = th.Tensor(test_idx)
+        if not isinstance(test_idx, th.LongTensor):
+            test_idx = th.LongTensor(test_idx)
         if y is not None and not isinstance(y, th.LongTensor):
             y = th.LongTensor(y)
         # load the text
@@ -165,13 +165,11 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         test_mask[test_idx + self.n_vocabs_] = 1
         train_mask = th.logical_not(test_mask)
         train_mask[:self.n_vocabs_] = 0
-        # TODO if we ever include unlabelled documents, this needs to change
-        doc_mask = train_mask + test_mask
-        g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y,
-                         test_mask=test_mask,
-                         train_mask=train_mask,
-                         doc_mask=doc_mask,
-                         n_vocab=n_vocabs)
+        # add pseudo-labels for word nodes, so that masks can be directly applied
+        y_nodes = th.zeros(self.n_nodes_, dtype=th.long)
+        y_nodes[self.n_vocabs_:] = y
+        g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y_nodes,
+                         test_mask=test_mask, train_mask=train_mask, n_vocab=n_vocabs)
 
         if self.save_path is not None:
             print(f"saving to  {self.save_path}")

@@ -40,22 +40,26 @@ criterion = th.nn.CrossEntropyLoss(reduction='mean')
 optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
 
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
-gcn = gcn.to(device).float()
-# g = g.to(device)
+cpu = th.device('cpu')
+print(f"Device: {device}")
 
+# g = g.to(device)
+gcn = gcn.float()
 loss_history = []
 length = len(str(epochs))
 
 sampler = tg.data.GraphSAINTRandomWalkSampler(data=g, batch_size=1024, walk_length=4, num_steps=epochs,
-                                              sample_coverage=100)
+                                              sample_coverage=0)
 
 print("#### TRAINING START ####")
 # for epoch in range(epochs):
 for epoch, batch in enumerate(sampler):
+    gcn = gcn.to(device)
     batch = batch.to(device)
     gcn.train()
-    outputs = gcn(g)[batch.train_mask]
-    loss = criterion(outputs, g.y[train_idx])
+    outputs = gcn(batch)[batch.train_mask]#.to(cpu)
+    y_true = batch.y[batch.train_mask]#.to(cpu)
+    loss = criterion(outputs, y_true)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -65,19 +69,21 @@ for epoch, batch in enumerate(sampler):
         break
     gcn.eval()
     with th.no_grad():
-        predictions = np.argmax(gcn(g)[g.test_idx].cpu().numpy(), axis=1)
-        pred_train = np.argmax(gcn(g)[g.train_idx].cpu().numpy(), axis=1)
-        acc = accuracy_score(g.y.cpu()[test_idx].detach(), predictions)
-        acc_train = accuracy_score(g.y.cpu()[train_idx].detach(), pred_train)
+        gcn = gcn.cpu()
+        predictions = np.argmax(gcn(g)[g.test_mask].cpu().numpy(), axis=1)
+        pred_train = np.argmax(gcn(g)[g.train_mask].cpu().numpy(), axis=1)
+        acc = accuracy_score(g.y.cpu()[g.test_mask].detach(), predictions)
+        acc_train = accuracy_score(g.y.cpu()[g.train_mask].detach(), pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc: .3f}")
 
 print("Optimization finished!")
 with th.no_grad():
-    predictions = np.argmax(gcn(g)[g.test_idx].cpu().detach().numpy(), axis=1)
-    acc = accuracy_score(g.y.cpu()[test_idx].detach(), predictions)
-    f1 = f1_score(g.y.cpu()[test_idx].detach(), predictions, average='macro')
-    conf_mat = confusion_matrix(g.y.cpu()[test_idx].detach(), predictions)
+    gcn = gcn.cpu()
+    predictions = np.argmax(gcn(g)[g.test_mask].cpu().detach().numpy(), axis=1)
+    acc = accuracy_score(g.y.cpu()[g.test_mask].detach(), predictions)
+    f1 = f1_score(g.y.cpu()[g.test_mask].detach(), predictions, average='macro')
+    conf_mat = confusion_matrix(g.y.cpu()[g.test_mask].detach(), predictions)
 
 print(f"Test Accuracy: {acc: .3f}")
 print(f"F1-Macro: {f1: .3f}")
