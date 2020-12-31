@@ -42,37 +42,45 @@ device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 gcn = gcn.to(device).float()
 g = g.to(device)
 
-loss_history = []
+history = []
 length = len(str(epochs))
 print("#### TRAINING START ####")
 for epoch in range(epochs):
     gcn.train()
-    outputs = gcn(g)[g.train_idx]
-    loss = criterion(outputs, g.y[train_idx])
+    outputs = gcn(g)[g.train_mask]
+    loss = criterion(outputs, g.y[g.train_mask])
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    loss_history.append(loss.item())
-    if epoch > 5 and loss_history[-5] < loss_history[-1] and EARLY_STOPPING:
-        print("early stopping activated!")
-        break
     gcn.eval()
     with th.no_grad():
-        predictions = np.argmax(gcn(g)[g.test_idx].cpu().numpy(), axis=1)
-        pred_train = np.argmax(gcn(g)[g.train_idx].cpu().numpy(), axis=1)
-        acc = accuracy_score(g.y.cpu()[test_idx].detach(), predictions)
-        acc_train = accuracy_score(g.y.cpu()[train_idx].detach(), pred_train)
+        predictions = np.argmax(gcn(g)[g.test_mask].cpu().numpy(), axis=1)
+        pred_train = np.argmax(gcn(g)[g.train_mask].cpu().numpy(), axis=1)
+        acc = accuracy_score(g.y.cpu()[g.test_mask].detach(), predictions)
+        acc_train = accuracy_score(g.y.cpu()[g.train_mask].detach(), pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc: .3f}")
+    history.append((loss.item(), acc))
+    if epoch > 5 and history[-5][0] < history[-1][0] and EARLY_STOPPING:
+        print("early stopping activated!")
+        break
 
 print("Optimization finished!")
 with th.no_grad():
-    predictions = np.argmax(gcn(g)[g.test_idx].cpu().detach().numpy(), axis=1)
-    acc = accuracy_score(g.y.cpu()[test_idx].detach(), predictions)
-    f1 = f1_score(g.y.cpu()[test_idx].detach(), predictions, average='macro')
-    conf_mat = confusion_matrix(g.y.cpu()[test_idx].detach(), predictions)
+    predictions = np.argmax(gcn(g)[g.test_mask].cpu().detach().numpy(), axis=1)
+    acc = accuracy_score(g.y.cpu()[g.test_mask].detach(), predictions)
+    f1 = f1_score(g.y.cpu()[g.test_mask].detach(), predictions, average='macro')
+    conf_mat = confusion_matrix(g.y.cpu()[g.test_mask].detach(), predictions)
 
 print(f"Test Accuracy: {acc: .3f}")
 print(f"F1-Macro: {f1: .3f}")
 print("Confusion matrix:")
 print(conf_mat)
+
+from matplotlib import pyplot as plt
+
+loss, acc = zip(*history)
+
+plt.plot(loss, label="TrainLoss")
+plt.plot(acc, label="ValAcc")
+plt.show()

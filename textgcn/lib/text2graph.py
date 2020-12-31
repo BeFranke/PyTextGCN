@@ -47,6 +47,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         """
         sklearn-module that transforms a text corpus into a graph, according to the algorithm specified by
         Yao et al, Graph Convolutional Networks for Text Classification (2018), https://arxiv.org/abs/1809.05679.
+        Defaults are set according to the recommendations of the authors.
         :param min_df: Minimum word frequency for the word to be included, can be float (relative frequency)
                         or int (absolute frequency)
         :param window_size: Size of the sliding window. Bigger values mean more edges in the graph.
@@ -57,7 +58,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         :param rm_stopwords: weather to remove common words that do not contain much information from the text.
                             currently, nltk is used for this.
         :param sparse_features: if True, feature matrix is computed as sparse. This can save a lot of RAM and GPU memory
-                                during training but can only be used if the neural net can handle sparse matrices
+                                during training but can only be used if the neural net can handle sparse matrices.
+                                Depending on architecture, enabling this can lead to CUDA errors when training on GPU.
         """
         self.sparse_features = sparse_features
         self.rm_stopwords = rm_stopwords
