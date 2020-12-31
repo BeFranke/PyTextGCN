@@ -28,4 +28,4 @@ Either run `train.py` to reproduce our experiments or import the modules `textgc
 and/or `textgcn.GCN` into your own code. 
 
 ## Documentation
-Currently resides in teh source files.
+Currently resides in the source files.
