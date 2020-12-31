@@ -94,8 +94,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                 - y: Node labels, shape (n_nodes_,)
                 - edge_index: Adjacency in COO format, shape (2, n_edges_)
                 - edge_attr: Edge weights, shape (n_edges,)
-                - test_mask: node bitmap showing which (document-)nodes should be used for testing
-                - train_idx: node bitmap showing which (document-)nodes should be used for training
+                - test_mask: bitmap showing which nodes should be used for computing loss and metrics during testing
+                - train_mask: bitmap showing which nodes should be used for computing loss and metrics during training
                 - n_vocab: number of unique words in the vocabulary (also, the lowest document-node index)
         """
         th.set_grad_enabled(False)

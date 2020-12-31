@@ -1,5 +1,5 @@
-import datetime
 import os
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -8,11 +8,11 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
 
-from textgcn.lib.models import GCN
-from textgcn.lib.text2graph import Text2GraphTransformer
+from textgcn import GCN, Text2GraphTransformer
 
 CPU_ONLY = True
 EARLY_STOPPING = False
+epochs = 200
 
 train = pd.read_csv("data/amazon/train_40k.csv")
 # save_path="textgcn/graphs/"
@@ -38,7 +38,6 @@ print("Graph built")
 
 gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=200)
 
-epochs = 100
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
@@ -56,7 +55,7 @@ for epoch in range(epochs):
     outputs = gcn(g)[g.train_mask]
     loss = criterion(outputs, g.y[g.train_mask])
     # performance tip: try set_to_none=True
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
     gcn.eval()
@@ -91,6 +90,9 @@ print(f"Training took {time_end - time_start} for {epoch} epochs.")
 
 loss, acc = zip(*history)
 
-plt.plot(loss, label="TrainLoss")
-plt.plot(acc, label="ValAcc")
+fig, axs = plt.subplots(2)
+axs[0].plot(loss, label="TrainLoss")
+axs[1].plot(acc, label="ValAcc")
+axs[0].legend()
+axs[1].legend()
 plt.show()
