@@ -17,7 +17,7 @@ cdef struct WeightedEdges:
     int n_edges
 
 # constant declaring which is the threshold for a pmi score to be considered "not zero"
-cdef const float EPSILON = 1e-10
+cdef float EPSILON = 1e-10
 
 ##### INTERFACE ######
 cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
