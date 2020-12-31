@@ -17,7 +17,7 @@ cdef struct WeightedEdges:
     int n_edges
 
 # constant declaring which is the threshold for a pmi score to be considered "not zero"
-cdef float EPSILON = 1e-10
+cdef const float EPSILON = 1e-10
 
 ##### INTERFACE ######
 cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigned int n_documents,
@@ -26,7 +26,8 @@ cpdef tuple compute_word_word_edges(int[:, ::1] X, unsigned int n_vocab, unsigne
     """
     bridge function that serves a a python-to-C entry for the graph computation
     :param X: input text, cleaned and (densely!) tokenized by CountVectorizer or similar, 
-                shape (n_documents, seq_len) with values in [0, n_vocab)
+                shape (n_documents, seq_len) with values in [0, n_vocab).
+                Sequences of different size need to be padded accordingly.
     :param n_vocab: vocabulary size in the input
     :param n_documents: number of documents in the input
     :param seq_len: length of sequences
@@ -170,10 +171,10 @@ cdef WeightedEdges* edges_from_counts(unsigned int* c_ij, unsigned int n_vocab, 
     PyMem_Free(c_ij)
     if verbose > 1:
         print("free")
-    # don't forget self-loops
+    # don't forget that edges are symmetric
     n_edges = n_edges * 2 # + n_vocab   # add n_vocab if self-loops need to be added manually
 
-    # extract the edges and weights into a fixed size memory region
+    # extract the edges and weights into a COO-formated memory region
     edges = <int*> PyMem_Malloc(sizeof(int) * 2 * n_edges)
     weights = <float*> PyMem_Malloc(sizeof(int) * n_edges)
     k = 0
@@ -264,15 +265,6 @@ cpdef unsigned int[::1] sliding_window_tester(int[:, ::1] X, unsigned int n_voca
                                                  unsigned int n_jobs = 1):
     """
     THIS FUNCTION SOLELY EXISTS TO EXPOSE THE RESULTS OF sliding_window, IT IS ONLY FOR TESTING
-    :param X: input text, cleaned and (densely!) tokenized by CountVectorizer or similar, 
-                shape (n_documents, seq_len) with values in [0, n_vocab)
-    :param n_vocab: vocabulary size in the input
-    :param n_documents: number of documents in the input
-    :param seq_len: length of sequences
-    :param window_size: size of sliding context window. Higher values capture long-range dependencies 
-                        at the cost of short range dependencies
-    :param n_jobs: number of jobs for parallel processing. Higher = more RAM and CPU usage
-    :return: c_ij containing pairwise counts 
     """
     # init block
     cdef unsigned int[::1] c_ij = np.zeros(SymMatSize_Diag(n_vocab), dtype=np.uint32)
@@ -285,7 +277,6 @@ cpdef unsigned int[::1] sliding_window_tester(int[:, ::1] X, unsigned int n_voca
 cpdef short test_sym_matrix():
     """
     test function for the symmetric matrix functions
-    :return: 
     """
     cdef float mat[10]       # simulate 4 x 4 matrix
     memset(mat, 0, sizeof(float) * 10)

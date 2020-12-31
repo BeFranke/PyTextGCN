@@ -1,11 +1,15 @@
-from textgcn.lib.text2graph import Text2GraphTransformer
-import pandas as pd
+import datetime
+import os
+
 import numpy as np
-from textgcn.lib.models import GCN
+import pandas as pd
 import torch as th
+from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
-import os
+
+from textgcn.lib.models import GCN
+from textgcn.lib.text2graph import Text2GraphTransformer
 
 CPU_ONLY = True
 EARLY_STOPPING = False
@@ -36,19 +40,22 @@ gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=200)
 
 epochs = 100
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
-optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
 
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 gcn = gcn.to(device).float()
 g = g.to(device)
 
+# optimizer needs to be constructed AFTER the model was moved to GPU
+optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
 history = []
 length = len(str(epochs))
 print("#### TRAINING START ####")
+time_start = datetime.now()
 for epoch in range(epochs):
     gcn.train()
     outputs = gcn(g)[g.train_mask]
     loss = criterion(outputs, g.y[g.train_mask])
+    # performance tip: try set_to_none=True
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
@@ -66,6 +73,8 @@ for epoch in range(epochs):
         break
 
 print("Optimization finished!")
+print("Saving model...")
+th.save(gcn, f"models/gcn_{datetime.now()}.nn")
 with th.no_grad():
     predictions = np.argmax(gcn(g)[g.test_mask].cpu().detach().numpy(), axis=1)
     acc = accuracy_score(g.y.cpu()[g.test_mask].detach(), predictions)
@@ -77,7 +86,8 @@ print(f"F1-Macro: {f1: .3f}")
 print("Confusion matrix:")
 print(conf_mat)
 
-from matplotlib import pyplot as plt
+time_end = datetime.now()
+print(f"Training took {time_end - time_start} for {epoch} epochs.")
 
 loss, acc = zip(*history)
 
