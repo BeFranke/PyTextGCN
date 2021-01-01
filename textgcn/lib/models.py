@@ -25,7 +25,7 @@ class GCN(nn.Module):
         return nn.Softmax(dim=-1)(x)
 
 
-class HeterogeneousNet(nn.Module):
+class HierarchyGAT(nn.Module):
     """
     Basic idea: GAT for heterogeneous Graph, then throw away word-nodes and compute MLP on doc-nodes with optional
     input from higher hierarchies
@@ -56,7 +56,7 @@ class HeterogeneousNet(nn.Module):
         # throw away word-nodes
         x = x[self.doc_map]
 
-        # add hierachy information if present
+        # add hierarchy information if present
         if hierachy_feat is not None:
             x = th.hstack([x, hierachy_feat.unsqueeze(1)])
 

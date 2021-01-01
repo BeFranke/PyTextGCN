@@ -1,7 +1,7 @@
 from textgcn.lib.text2graph import Text2GraphTransformer
 import pandas as pd
 import numpy as np
-from textgcn.lib.models import GCN
+from textgcn.lib.models import GCN, HierarchyGAT
 import torch as th
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
@@ -11,7 +11,7 @@ import torch_geometric as tg
 CPU_ONLY = False
 EARLY_STOPPING = False
 
-train = pd.read_csv("data/amazon/train_40k.csv")
+train = pd.read_csv("data/amazon/train.csv")
 # save_path="textgcn/graphs/"
 save_path = None
 
@@ -33,7 +33,11 @@ else:
 
 print("Graph built")
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=200)
+gcn = HierarchyGAT(in_feats=g.x.shape[1],
+                   n_hidden=128,
+                   n_classes=len(np.unique(y)),
+                   n_layers=2,
+                   doc_map=th.logical_or(g.test_mask, g.train_mask))
 
 epochs = 100
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
@@ -48,22 +52,24 @@ loss_history = []
 length = len(str(epochs))
 
 # sampler = tg.data.GraphSAINTRandomWalkSampler(data=g, batch_size=1024, walk_length=4, num_steps=epochs, sample_coverage=0)
-sampler = tg.data.NeighborSampler
-optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
+sampler = tg.data.RandomNodeSampler(g, num_parts=20, shuffle=True, num_workers=5)
+
 gcn = gcn.to(device)
+optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
 print("#### TRAINING START ####")
 # for epoch in range(epochs):
-for epoch, batch in enumerate(sampler):
-    gcn = gcn.to(device)
-    batch = batch.to(device)
-    gcn.train()
-    outputs = gcn(batch)[batch.train_mask]#.to(cpu)
-    y_true = batch.y[batch.train_mask]#.to(cpu)
-    loss = criterion(outputs, y_true)
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    loss_history.append(loss.item())
+for epoch in range(epochs):
+    for batch in sampler:
+        gcn = gcn.to(device)
+        batch = batch.to(device)
+        gcn.train()
+        outputs = gcn(batch)[batch.train_mask]#.to(cpu)
+        y_true = batch.y[batch.train_mask]#.to(cpu)
+        loss = criterion(outputs, y_true)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        loss_history.append(loss.item())
     if epoch > 5 and loss_history[-5] < loss_history[-1] and EARLY_STOPPING:
         print("early stopping activated!")
         break

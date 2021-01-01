@@ -170,7 +170,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         val_mask = th.zeros(self.n_nodes_, dtype=th.bool)
 
         test_mask[test_idx + self.n_vocabs_] = 1
-        val_mask[val_idx + self.n_vocabs_] = 1
+        if val_idx is not None:
+            val_mask[val_idx + self.n_vocabs_] = 1
 
         train_mask = th.logical_not(th.logical_or(test_mask, val_mask))
         train_mask[:self.n_vocabs_] = 0

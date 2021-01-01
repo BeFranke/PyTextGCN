@@ -14,7 +14,7 @@ class TestGraphBuilder(TestCase):
     def test_sliding_window_time(self):
         print("loading and parsing data, this might take a few seconds...")
         time = [datetime.now()]
-        train = pd.read_csv("../../data/amazon/train_40k.csv")
+        train = pd.read_csv("../../data/amazon/train.csv")
 
         X = train['Text'].tolist()
         cv = CountVectorizer(stop_words="english", min_df=5, max_df=0.9).fit(X)
@@ -47,7 +47,7 @@ class TestGraphBuilder(TestCase):
     def test_ww_edges_time(self):
         print("loading and parsing data, this might take a few seconds...")
         time = [datetime.now()]
-        train = pd.read_csv("../../data/amazon/train_40k.csv")
+        train = pd.read_csv("../../data/amazon/train.csv")
 
         X = train['Text'].tolist()
         cv = CountVectorizer(stop_words="english", min_df=5, max_df=0.9).fit(X)
