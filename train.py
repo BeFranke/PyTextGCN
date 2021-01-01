@@ -13,6 +13,8 @@ from textgcn import GCN, Text2GraphTransformer
 CPU_ONLY = True
 EARLY_STOPPING = False
 epochs = 200
+lr = 0.1
+n_hidden = 200
 
 train = pd.read_csv("data/amazon/train_40k.csv")
 # save_path="textgcn/graphs/"
@@ -27,7 +29,7 @@ test_idx = np.random.choice(len(x), int(0.1 * len(x)), replace=False)
 train_idx = np.array([x for x in range(len(x)) if x not in test_idx])
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.9)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx)
@@ -36,7 +38,7 @@ else:
 
 print("Graph built")
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=200)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -45,7 +47,7 @@ gcn = gcn.to(device).float()
 g = g.to(device)
 
 # optimizer needs to be constructed AFTER the model was moved to GPU
-optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
+optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
 history = []
 length = len(str(epochs))
 print("#### TRAINING START ####")

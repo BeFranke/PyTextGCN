@@ -37,7 +37,6 @@ gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=200)
 
 epochs = 100
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
-optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
 
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 cpu = th.device('cpu')
@@ -48,9 +47,10 @@ gcn = gcn.float()
 loss_history = []
 length = len(str(epochs))
 
-sampler = tg.data.GraphSAINTRandomWalkSampler(data=g, batch_size=1024, walk_length=4, num_steps=epochs,
-                                              sample_coverage=0)
-
+# sampler = tg.data.GraphSAINTRandomWalkSampler(data=g, batch_size=1024, walk_length=4, num_steps=epochs, sample_coverage=0)
+sampler = tg.data.NeighborSampler
+optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
+gcn = gcn.to(device)
 print("#### TRAINING START ####")
 # for epoch in range(epochs):
 for epoch, batch in enumerate(sampler):
