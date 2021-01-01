@@ -80,7 +80,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
 
     def fit_transform(self, X: Union[List[str], str],
                       y: Union[th.Tensor, np.ndarray, List[int], None] = None,
-                      test_idx: Union[th.Tensor, np.ndarray, List[int], None] = None) -> tg.data.Data:
+                      test_idx: Union[th.Tensor, np.ndarray, List[int], None] = None,
+                      val_idx: Union[th.Tensor, np.ndarray, List[int], None] = None,) -> tg.data.Data:
         """
         transform input corpus into a torch_geometric Data-object (a graph)
         :param X: corpus, can either be:
@@ -89,12 +90,14 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                       folder are taken as documents
         :param y: list of labels, shape (len(x),)
         :param test_idx: this parameter can tell the downstream neural net which nodes should be used for testing
+        :param val_idx: this parameter can tell the downstream neural net which nodes should be used for validation
         :return: the resulting graph as tg.Data object with attributes:
                 - x: Node features, shape (n_nodes_, n_nodes_) (MAY BE SPARSE!)
                 - y: Node labels, shape (n_nodes_,)
                 - edge_index: Adjacency in COO format, shape (2, n_edges_)
                 - edge_attr: Edge weights, shape (n_edges,)
                 - test_mask: bitmap showing which nodes should be used for computing loss and metrics during testing
+                - val_mask: bitmap showing which nodes should be used for computing loss and metrics during validation
                 - train_mask: bitmap showing which nodes should be used for computing loss and metrics during training
                 - n_vocab: number of unique words in the vocabulary (also, the lowest document-node index)
         """
@@ -164,14 +167,18 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # node_feats = th.eye(n_docs + n_vocabs)
         node_feats = self.node_feats() if self.sparse_features else th.eye(self.n_nodes_)
         test_mask = th.zeros(self.n_nodes_, dtype=th.bool)
+        val_mask = th.zeros(self.n_nodes_, dtype=th.bool)
+
         test_mask[test_idx + self.n_vocabs_] = 1
-        train_mask = th.logical_not(test_mask)
+        val_mask[val_idx + self.n_vocabs_] = 1
+
+        train_mask = th.logical_not(th.logical_or(test_mask, val_mask))
         train_mask[:self.n_vocabs_] = 0
         # add pseudo-labels for word nodes, so that masks can be directly applied
         y_nodes = th.zeros(self.n_nodes_, dtype=th.long)
         y_nodes[self.n_vocabs_:] = y
         g = tg.data.Data(x=node_feats.float(), edge_index=coo.T, edge_attr=edge_weights.float(), y=y_nodes,
-                         test_mask=test_mask, train_mask=train_mask, n_vocab=n_vocabs)
+                         test_mask=test_mask, train_mask=train_mask, val_mask=val_mask, n_vocab=n_vocabs)
 
         if self.save_path is not None:
             print(f"saving to  {self.save_path}")
