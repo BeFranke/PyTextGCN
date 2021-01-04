@@ -19,6 +19,8 @@ epochs = 100
 train_val_split = 0.1
 lr = 0.2
 save_model = False
+hierarchical_feats = True
+
 
 train = pd.read_csv("data/amazon/train.csv")
 # test = pd.read_csv("data/amazon/test.csv")
@@ -42,7 +44,7 @@ t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, 
 
 hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
 
-g_1 = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy)
+g_1 = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy if hierarchical_feats else None)
 print("Graph built!")
 
 gcn_1 = GCN(g_1.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
