@@ -11,7 +11,7 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from torch_geometric import nn
 
 from textgcn import GCN, Text2GraphTransformer
-from textgcn.lib.models import HierarchyGNN, JumpingKnowledge
+from textgcn.lib.models import HierarchyGNN, JumpingKnowledgeNetwork
 
 CPU_ONLY = False
 EARLY_STOPPING = False
