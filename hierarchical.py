@@ -72,10 +72,10 @@ for epoch in range(epochs):
     gcn.eval()
     with th.no_grad():
         logits = gcn(g)
-        val_loss = criterion(logits[g.val_mask], g.y[g.val_mask])
-        pred_val = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
+        val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
+        pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
         pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-        acc_val = accuracy_score(g.y.cpu()[g.val_mask], pred_val)
+        acc_val = accuracy_score(g.y.cpu()[g.test_mask], pred_val)
         acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
