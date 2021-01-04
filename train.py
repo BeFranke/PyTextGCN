@@ -48,14 +48,14 @@ t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, 
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
+    print("Graph built!")
 else:
     g = t2g.load_graph(os.path.join(save_path, ls[0]))
+    print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
 
-print("Graph built")
-
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50)
-gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1,
-                   graph_layer=nn.GraphConv)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50)
+# gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1,
+#                    graph_layer=nn.GraphConv)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -68,6 +68,7 @@ optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
 scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 history = []
 length = len(str(epochs))
+print(device)
 print("#### TRAINING START ####")
 time_start = datetime.now()
 for epoch in range(epochs):
@@ -112,7 +113,7 @@ print("Confusion matrix:")
 print(conf_mat)
 
 time_end = datetime.now()
-print(f"Training took {time_end - time_start} for {epoch} epochs.")
+print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
 loss, acc = zip(*history)
 
