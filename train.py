@@ -11,7 +11,7 @@ from sklearn.preprocessing import LabelEncoder
 from torch_geometric import nn
 
 from textgcn import GCN, Text2GraphTransformer
-from textgcn.lib.models import HierarchyGNN
+from textgcn.lib.models import HierarchyGNN, JumpingKnowledge
 
 CPU_ONLY = False
 EARLY_STOPPING = False
@@ -53,9 +53,10 @@ else:
     g = t2g.load_graph(os.path.join(save_path, ls[0]))
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
+# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1,
 #                    graph_layer=nn.GraphConv)
+gcn = JumpingKnowledge(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
