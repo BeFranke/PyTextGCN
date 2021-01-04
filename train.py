@@ -53,7 +53,7 @@ else:
     g = t2g.load_graph(os.path.join(save_path, ls[0]))
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1,
 #                    graph_layer=nn.GraphConv)
 
@@ -76,7 +76,7 @@ for epoch in range(epochs):
     outputs = gcn(g)[g.train_mask]
     loss = criterion(outputs, g.y[g.train_mask])
     # performance tip: try set_to_none=True
-    optimizer.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step()
     gcn.eval()
