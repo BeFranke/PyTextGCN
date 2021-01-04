@@ -8,16 +8,17 @@ class GCN(nn.Module):
         super(GCN, self).__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.graph_layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
-        for i in range(n_gcn - 1):
+        self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
+        for i in range(n_gcn - 2):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
-        self.mlp = th.nn.Linear(n_hidden_gcn, out_channels)
+
+        self.layers.append(GCNConv(n_hidden_gcn, out_channels))
 
     def forward(self, g):
         x = g.x
-        for i, layer in enumerate(self.graph_layers):
+        for i, layer in enumerate(self.layers):
             x = layer(x, g.edge_index, g.edge_attr)
-            if i < len(self.graph_layers) - 1:
+            if i < len(self.layers) - 1:
                 # x = self.activation(x)    # GCN includes RELU
                 x = nn.functional.dropout(x, p=self.dropout, training=self.training)
 
@@ -30,20 +31,22 @@ class JumpingKnowledge(nn.Module):
         super().__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.graph_layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
+        self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
         for i in range(n_gcn - 2):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
-        self.graph_layers.append(GCNConv(n_hidden_gcn, out_channels))
+        self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
+        self.layers.append(th.nn.Linear(n_hidden_gcn * n_gcn, out_channels))
 
     def forward(self, g):
         x = g.x
         acts = []
-        for i, layer in enumerate(self.graph_layers):
-            x = layer(x, g.edge_index, g.edge_attr)
-            x = nn.functional.dropout(x, p=self.dropout, training=self.training)
-            acts.append(x)
-
-        x = self.mlp(x)
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                x = layer(x, g.edge_index, g.edge_attr)
+                x = nn.functional.dropout(x, p=self.dropout, training=self.training)
+                acts += [x]
+            else:
+                x = layer(th.cat(acts, dim=-1))
 
         return nn.Softmax(dim=-1)(x)
 
