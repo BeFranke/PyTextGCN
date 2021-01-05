@@ -17,7 +17,7 @@ CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 100
 train_val_split = 0.1
-lr = 0.2
+lr = 0.4
 save_model = False
 hierarchical_feats = True
 
@@ -25,8 +25,8 @@ hierarchical_feats = True
 train = pd.read_csv("data/amazon/train.csv")
 # test = pd.read_csv("data/amazon/test.csv")
 
-save_path = "textgcn/graphs/"
-# save_path = None
+# save_path = "textgcn/graphs/"
+save_path = None
 x = train['Text'].tolist()
 y = train['Cat2'].tolist()
 y_top = train['Cat1'].tolist()
@@ -44,16 +44,18 @@ t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, 
 
 hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
 
+
 g_1 = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy if hierarchical_feats else None)
 print("Graph built!")
 
-gcn_1 = GCN(g_1.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.2, activation=th.nn.SELU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
-gcn = gcn_1.to(device).float()
-g = g_1.to(device)
+gcn = gcn.to(device).float()
+g = g.to(device)
 
 # optimizer needs to be constructed AFTER the model was moved to GPU
 optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
