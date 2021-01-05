@@ -26,15 +26,14 @@ class GCN(nn.Module):
 
 
 class JumpingKnowledgeNetwork(nn.Module):
-    # currently just a GCN with skip connections
     def __init__(self, in_channels, out_channels, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU, dropout=0.5):
         super().__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.layers = nn.ModuleList([GraphConv(in_channels, n_hidden_gcn)])
+        self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
         for i in range(n_gcn - 2):
-            self.layers.append(GraphConv(n_hidden_gcn, n_hidden_gcn))
-        self.layers.append(GraphConv(n_hidden_gcn, n_hidden_gcn))
+            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
+        self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
         self.jk = JumpingKnowledge(mode="lstm", channels=n_hidden_gcn, num_layers=n_gcn)
         self.lin = nn.Linear(n_hidden_gcn, out_channels)
 
