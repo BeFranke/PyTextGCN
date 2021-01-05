@@ -1,6 +1,6 @@
 from torch import nn
 import torch as th
-from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge
+from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv
 
 
 class GCN(nn.Module):
@@ -10,9 +10,9 @@ class GCN(nn.Module):
         self.dropout = dropout
         self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
         for i in range(n_gcn - 2):
-            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
+            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
 
-        self.layers.append(GCNConv(n_hidden_gcn, out_channels))
+        self.layers.append(GCNConv(n_hidden_gcn, out_channels, add_self_loops=True))
 
     def forward(self, g):
         x = g.x
@@ -31,10 +31,10 @@ class JumpingKnowledgeNetwork(nn.Module):
         super().__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
+        self.layers = nn.ModuleList([GraphConv(in_channels, n_hidden_gcn)])
         for i in range(n_gcn - 2):
-            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
-        self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn))
+            self.layers.append(GraphConv(n_hidden_gcn, n_hidden_gcn))
+        self.layers.append(GraphConv(n_hidden_gcn, n_hidden_gcn))
         self.jk = JumpingKnowledge(mode="lstm", channels=n_hidden_gcn, num_layers=n_gcn)
         self.lin = nn.Linear(n_hidden_gcn, out_channels)
 

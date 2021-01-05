@@ -15,9 +15,9 @@ from textgcn.lib.models import HierarchyGNN, JumpingKnowledgeNetwork
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 100
-train_val_split = 0.1
-lr = 0.4
+epochs = 200
+train_val_split = 0.15
+lr = 0.3
 save_model = False
 hierarchical_feats = True
 
@@ -41,15 +41,14 @@ y_top = LabelEncoder().fit_transform(y_top)
 print("Data loaded!")
 
 t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.9)
-
 hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
 
 
-g_1 = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy if hierarchical_feats else None)
+g = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy if hierarchical_feats else None)
 print("Graph built!")
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
-# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.2, activation=th.nn.SELU)
+# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, n_gcn=2)
+gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_gcn=3, n_hidden_gcn=64, dropout=0.2, activation=th.nn.ReLU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
