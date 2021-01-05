@@ -19,6 +19,7 @@ epochs = 200
 train_val_split = 0.1
 lr = 0.2
 save_model = False
+dropout = 0.5
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -56,7 +57,7 @@ else:
 # gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
 # gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
-gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.7, activation=th.nn.SELU)
+# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.7, activation=th.nn.SELU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 

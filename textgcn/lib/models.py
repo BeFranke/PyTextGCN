@@ -1,6 +1,6 @@
 from torch import nn
 import torch as th
-from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv
+from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv, DeepGCNLayer
 
 
 class GCN(nn.Module):
@@ -72,60 +72,3 @@ class JumpingGCN(nn.Module):
         h3 = self.l3(th.cat([h1, h2], dim=-1), g.edge_index, g.edge_attr)
         return nn.Softmax(dim=-1)(h3)
 
-
-class HierarchyGNN(nn.Module):
-    """
-    Basic idea: GNN for heterogeneous Graph, then throw away word-nodes and compute MLP on doc-nodes with optional
-    input from higher hierarchies
-    """
-    def __init__(self, in_feats, n_classes, n_hidden=64, n_layers=2, dropout=0.5, activation=nn.ReLU,
-                 mlp_hidden=64, mlp_layers=2, hierarchy_feat_dim=0, graph_layer=GCNConv, residual=False):
-        super().__init__()
-        self.residual = residual
-        assert n_layers > 1
-        self.activation = activation()
-        self.dropout = dropout
-        self.layers_gcn = nn.ModuleList([graph_layer(in_channels=in_feats, out_channels=n_hidden)])
-        for _ in range(n_layers - 1):
-            self.layers_gcn.append(graph_layer(n_hidden, n_hidden))
-        # between these layers, word-nodes are discarded
-        if mlp_layers > 1:
-            self.layers_mlp = nn.ModuleList([th.nn.Linear(n_hidden + hierarchy_feat_dim, mlp_hidden)])
-            for _ in range(mlp_layers - 2):
-                self.layers_mlp.append(th.nn.Linear(mlp_hidden, mlp_hidden))
-            self.layers_mlp.append(th.nn.Linear(mlp_hidden, n_classes))
-        else:
-            self.layers_mlp = nn.ModuleList([th.nn.Linear(n_hidden + hierarchy_feat_dim, n_classes)])
-
-    def forward(self, g, hierachy_feat=None):
-        activations = []
-        x = g.x
-        # regular GNN feedforward
-        for layer in self.layers_gcn:
-            x = layer(x=x,
-                      edge_index=g.edge_index,
-                      edge_weight=g.edge_attr)
-            x = self.activation(x)
-            x = th.nn.functional.dropout(x, p=self.dropout, training=self.training)
-            activations.append(x)
-
-        # add hierarchy information if present
-        if hierachy_feat is not None:
-            doc_mask = th.logical_or(th.logical_or(g.val_mask, g.test_mask), g.train_mask)
-            if len(hierachy_feat.shape < 2):
-                hierachy_feat = hierachy_feat[:, None]
-            hf = th.zeros(x.shape([1]))
-            hf[doc_mask] = hierachy_feat
-            x = th.hstack([x, hierachy_feat])
-
-        # MLP feedforward
-        for i, layer in enumerate(self.layers_mlp):
-            if i == len(self.layers_mlp) - 1 and self.residual:
-                x = th.cat(activations, dim=-1)
-            x = layer(x)
-            if i < len(self.layers_mlp) - 1:
-                x = self.activation(x)
-                x = th.nn.functional.dropout(x, p=self.dropout, training=self.training)
-                activations.append(x)
-
-        return nn.Softmax(dim=-1)(x)
