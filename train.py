@@ -55,7 +55,7 @@ else:
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
 
 # gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.7, activation=th.nn.SELU)
 

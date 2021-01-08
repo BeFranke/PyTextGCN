@@ -5,6 +5,7 @@ import numpy as np
 from textgcn import Text2GraphTransformer
 import pandas as pd
 
+
 class TestText2Graph(TestCase):
     def test_inspect_adjacency(self):
         # This "test" is best viewed in PyCharm debugger, put a breakpoint at "print(df)" and look at the

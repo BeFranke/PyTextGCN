@@ -10,8 +10,8 @@ from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from torch_geometric import nn
 
-from textgcn import GCN, Text2GraphTransformer
-from textgcn.lib.models import HierarchyGNN, JumpingKnowledgeNetwork
+from textgcn import Text2GraphTransformer
+from textgcn.lib.models import JumpingKnowledgeNetwork, GCN
 
 CPU_ONLY = False
 EARLY_STOPPING = False
@@ -19,6 +19,8 @@ epochs = 200
 train_val_split = 0.15
 lr = 0.3
 save_model = False
+
+# set to "false" to evaluate flat approach
 hierarchical_feats = True
 
 
