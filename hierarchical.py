@@ -49,8 +49,8 @@ hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
 g = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hierarchy if hierarchical_feats else None)
 print("Graph built!")
 
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, n_gcn=2)
-gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_gcn=3, n_hidden_gcn=64, dropout=0.2, activation=th.nn.ReLU)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, n_gcn=2)
+# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_gcn=3, n_hidden_gcn=64, dropout=0.2, activation=th.nn.ReLU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
