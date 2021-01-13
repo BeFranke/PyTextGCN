@@ -17,7 +17,7 @@ from textgcn.lib.models import *
 CPU_ONLY = False
 epochs = 100
 train_val_split = 0.1
-k_split = 10
+k_split = 5
 
 # lr = 0.2
 save_model = False
