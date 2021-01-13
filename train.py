@@ -15,9 +15,9 @@ from textgcn.lib.models import *
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 200
+epochs = 150
 train_val_split = 0.1
-lr = 0.2
+lr = 0.05
 save_model = False
 
 train = pd.read_csv("data/amazon/train.csv")
@@ -52,11 +52,12 @@ if not ls:
 else:
     g = t2g.load_graph(os.path.join(save_path, ls[0]))
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
+    print(f"n_classes={len(np.unique(g.y))}")
 
 # gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
+# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=120)
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
-gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50, dropout=0.7, activation=th.nn.SELU)
+gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -92,7 +93,7 @@ for epoch in range(epochs):
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
     history.append((loss.item(), acc_val))
 
-    scheduler.step(val_loss)
+    # scheduler.step(val_loss)
 
     if epoch > 5 and history[-5][0] < history[-1][0] and EARLY_STOPPING:
         print("early stopping activated!")
