@@ -10,8 +10,8 @@ from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from torch_geometric import nn
 
-from textgcn import GCN, Text2GraphTransformer
-from textgcn.lib.models import HierarchyGNN, JumpingKnowledgeNetwork
+from textgcn import Text2GraphTransformer
+from textgcn.lib.models import JumpingKnowledgeNetwork, GCN
 
 CPU_ONLY = False
 EARLY_STOPPING = False
@@ -19,8 +19,9 @@ epochs = 200
 train_val_split = 0.15
 lr = 0.2
 save_model = False
-hierarchical_feats = False
 
+# set to "false" to evaluate flat approach
+hierarchical_feats = True
 
 train = pd.read_csv("data/amazon/train.csv")
 # test = pd.read_csv("data/amazon/test.csv")
@@ -48,6 +49,7 @@ g = t2g.fit_transform(x, y, test_idx=val_idx, val_idx=None, hierarchy_feats=hier
 print("Graph built!")
 
 gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, n_gcn=2)
+
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_gcn=4, n_hidden_gcn=64, dropout=0.5, activation=th.nn.ReLU)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
