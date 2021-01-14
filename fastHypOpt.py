@@ -21,7 +21,7 @@ k_split = 5
 
 # lr = 0.2
 save_model = False
-lable_category = "Cat1"
+lable_category = "Cat2"
 #Hyperparameters to optimize
 #learning rate
 lr_start = 0.05
@@ -29,7 +29,7 @@ lr_stop = 1
 lr_step = 0.05
 #dropout
 do_start = 0.05
-do_stop = 0.5
+do_stop = 0.7
 do_step = 0.05
 #n_hidden
 n_hidden_start = 64
@@ -136,7 +136,7 @@ for n_hidden in np.arange(n_hidden_start, n_hidden_stop+n_hidden_step, n_hidden_
             resultDf.loc[frameIterator] = [lr, dropout, n_hidden, scores.mean(), scores.std()]
 
 timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
-csv_name = "HypOpt_" + timestamp + ".csv"
+csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
 resultDf.to_csv(csv_name, encoding='utf-8')
 
 print("Optimization finished!")
