@@ -15,7 +15,7 @@ from textgcn import Text2GraphTransformer
 from textgcn.lib.models import JumpingKnowledgeNetwork, GCN
 
 CPU_ONLY = False
-epochs = 10
+epochs = 100
 train_val_split = 0.1
 k_split = 5
 
@@ -116,7 +116,6 @@ for n_hidden in np.arange(n_hidden_start, n_hidden_stop+n_hidden_step, n_hidden_
                     loss.backward()
                     optimizer.step()
                     gcn.eval()
-                    print("Test")
                     with th.no_grad():
                         logits = gcn(g)
                         val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
