@@ -23,9 +23,9 @@ k_split = 5
 lable_category = "Cat2"
 #Hyperparameters to optimize
 #learning rate
-lr_start = 0.05
-lr_stop = 1
-lr_step = 0.05
+lr_start = 0.005
+lr_stop = 0.5
+lr_step = 0.005
 #dropout
 do_start = 0.05
 do_stop = 0.7
