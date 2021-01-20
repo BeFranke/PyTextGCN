@@ -21,7 +21,7 @@ k_split = 5
 
 # lr = 0.2
 save_model = False
-lable_category = "Cat2"
+lable_category = "Cat1"
 #Hyperparameters to optimize
 #learning rate
 lr_start = 0.005
