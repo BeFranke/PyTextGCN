@@ -108,7 +108,6 @@ for n_hidden in np.arange(n_hidden_start, n_hidden_stop+n_hidden_step, n_hidden_
                 time_start = datetime.now()
                 for epoch in range(epochs):
                     gcn.train()
-                    # TODO Cuda fehler "RuntimeError: CUDA out of memory. Tried to allocate 2.42 GiB (GPU 0; 8.00 GiB total capacity; 3.03 GiB already allocated; 1.05 GiB free; 5.37 GiB reserved in total by PyTorch)" in the line below
                     outputs = gcn(g)[g.train_mask]
                     loss = criterion(outputs, g.y[g.train_mask])
                     # performance tip: try set_to_none=True
