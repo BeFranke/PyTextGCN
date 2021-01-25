@@ -32,8 +32,8 @@ do_start = 0.05
 do_stop = 0.7
 do_step = 0.05
 #n_hidden
-n_hidden_start = 16
-n_hidden_stop = 16
+n_hidden_start = 64
+n_hidden_stop = 64
 n_hidden_step = 1
 #
 lr_size = ((lr_stop - lr_start) / lr_step + 1)
@@ -108,8 +108,8 @@ for classifier in range(num_labels):
 
 
     # relabel the selected labels in ascending order
-    #TODO suspected error here. Relabeling?
-    g.y[g.train_mask] = th.from_numpy(LabelEncoder().fit_transform(g.y[g.train_mask]))
+    #TODO suspected error here. Relabeling? Coding comedy
+    g.y[indices] = th.from_numpy(LabelEncoder().fit_transform(th.squeeze(g.y[indices])))[:, None]
 
 
     for n_hidden in np.arange(n_hidden_start, n_hidden_stop+n_hidden_step, n_hidden_step):
@@ -124,7 +124,7 @@ for classifier in range(num_labels):
                 ################################################  define GCN  ################################################
                     # gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
                     #gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden, dropout=dropout)
-                    gcn = GCN(g.x.shape[1], len(np.unique(g.y[g.train_mask])), n_hidden_gcn=n_hidden, dropout=dropout)
+                    gcn = GCN(g.x.shape[1], len(th.unique(g.y[g.train_mask])), n_hidden_gcn=n_hidden, dropout=dropout)
                     # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
                     # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden, dropout=dropout, activation=th.nn.SELU)
 
@@ -165,7 +165,7 @@ for classifier in range(num_labels):
 
                 frameIterator += 1
                 # Dataframe structure: "LR", "DO", "n_hidden", "accuracy mean", "accuracy std"
-                classifier_name = "classifier_" + classifier
+                classifier_name = f"classifier_{classifier}"
                 resultDf.loc[frameIterator] = [classifier_name, lr, dropout, n_hidden, scores.mean(), scores.std()]
 
 timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
