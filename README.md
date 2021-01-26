@@ -15,6 +15,8 @@ This project was built with:
 - pytorch 1.7.0
 - torch-geometric 1.6.3
 - gcc 9.3.0
+- nltk 3.5
+- scipy 1.5.2
 
 At least the Text2Graph-module should work with other versions of these libraries, too.
 

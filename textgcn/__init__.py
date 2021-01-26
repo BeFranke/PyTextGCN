@@ -1,4 +1,4 @@
 from .lib import Text2GraphTransformer
-from .lib.models import GCN
+from .lib import models
 
-__all__ = [Text2GraphTransformer, GCN]
+__all__ = [Text2GraphTransformer, models]

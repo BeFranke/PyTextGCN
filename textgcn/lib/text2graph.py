@@ -11,7 +11,7 @@ import torch_geometric as tg
 import nltk
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from tqdm.asyncio import tqdm
+from tqdm import tqdm
 from scipy import sparse as sp
 
 from .clib.graphbuilder import compute_word_word_edges
@@ -81,7 +81,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def fit_transform(self, X: Union[List[str], str],
                       y: Union[th.Tensor, np.ndarray, List[int], None] = None,
                       test_idx: Union[th.Tensor, np.ndarray, List[int], None] = None,
-                      val_idx: Union[th.Tensor, np.ndarray, List[int], None] = None,) -> tg.data.Data:
+                      val_idx: Union[th.Tensor, np.ndarray, List[int], None] = None,
+                      hierarchy_feats: Union[th.Tensor, None] = None) -> tg.data.Data:
         """
         transform input corpus into a torch_geometric Data-object (a graph)
         :param X: corpus, can either be:
@@ -91,6 +92,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         :param y: list of labels, shape (len(x),)
         :param test_idx: this parameter can tell the downstream neural net which nodes should be used for testing
         :param val_idx: this parameter can tell the downstream neural net which nodes should be used for validation
+        :param hierarchy_feats: feats to include for each document, shape (n_docs, feat_dim)
+                                (feat_dim can be chosen freely)
         :return: the resulting graph as tg.Data object with attributes:
                 - x: Node features, shape (n_nodes_, n_nodes_) (MAY BE SPARSE!)
                 - y: Node labels, shape (n_nodes_,)
@@ -139,7 +142,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         docu_coo_sym = th.flip(docu_coo, dims=[1])
 
         if self.verbose > 0:
-            print(f"building word-word.edges...")
+            print(f"Building word-word edges...")
 
         # call compute_word_word_edges and map the two resulting numpy arrays to torch
         edges_coo, edge_ww_weights = map(
@@ -165,12 +168,13 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         # id-matrix of size n_vocab + n_docs
         # DONE by making this sparse we could save 2 GB of RAM
         # node_feats = th.eye(n_docs + n_vocabs)
-        node_feats = self.node_feats() if self.sparse_features else th.eye(self.n_nodes_)
+        node_feats = self.node_feats(hierarchy_feats) if self.sparse_features else th.eye(self.n_nodes_)
         test_mask = th.zeros(self.n_nodes_, dtype=th.bool)
         val_mask = th.zeros(self.n_nodes_, dtype=th.bool)
 
         test_mask[test_idx + self.n_vocabs_] = 1
-        val_mask[val_idx + self.n_vocabs_] = 1
+        if val_idx is not None:
+            val_mask[val_idx + self.n_vocabs_] = 1
 
         train_mask = th.logical_not(th.logical_or(test_mask, val_mask))
         train_mask[:self.n_vocabs_] = 0
@@ -211,14 +215,25 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         """
         return self.cv.vocabulary_
 
-    def node_feats(self):
+    def node_feats(self, hierarchy_feats):
         """
         computes sparse feature matrix
         :return sparse feature matrix
         """
         # inspired by:
         # https://kenqgu.com/classifying-asian-prejudice-in-tweets-during-covid-19-using-graph-convolutional-networks/
-        identity = sp.identity(self.n_nodes_)
-        ind0, ind1, vals = sp.find(identity)
+        # identity part
+        feat = sp.identity(self.n_nodes_)
+
+        # features part from hierarchy_feats
+        if hierarchy_feats is not None:
+            hf = np.zeros([self.n_nodes_, hierarchy_feats.shape[1]])
+            hf[self.n_vocabs_:, :] = hierarchy_feats
+            mat = sp.coo_matrix(hf)
+            feat = sp.hstack([feat, mat])
+
+        ind0, ind1, vals = sp.find(feat)
+
         inds = th.stack((th.from_numpy(ind0), th.from_numpy(ind1)))
         return th.sparse_coo_tensor(inds, vals, device=th.device("cpu"), dtype=th.float)
+

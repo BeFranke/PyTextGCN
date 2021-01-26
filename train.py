@@ -8,13 +8,18 @@ import torch as th
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
+from torch_geometric import nn
 
-from textgcn import GCN, Text2GraphTransformer
+from textgcn import Text2GraphTransformer
+from textgcn.lib.models import *
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 500
+epochs = 150
 train_val_split = 0.1
+lr = 0.05
+save_model = False
+dropout = 0.5
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -31,7 +36,7 @@ train_idx = np.array([x for x in range(len(x)) if x not in val_idx])
 x_test = test['Text'].tolist()
 y_test = test['Cat1'].tolist()
 
-test_idx = np.arange(len(x)+1, len(x)+ len(x_test))
+test_idx = np.arange(len(x) + 1, len(x) + len(x_test))
 
 # Combine training & test data set
 x = x + x_test
@@ -44,12 +49,17 @@ t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, 
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
+    print("Graph built!")
 else:
-    g = t2g.load_graph(os.path.join("textgcn/graphs", ls[0]))
+    g = t2g.load_graph(os.path.join(save_path, ls[0]))
+    print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
+    print(f"n_classes={len(np.unique(g.y))}")
 
-print("Graph built")
+# gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
 
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=50)
+# gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
+# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -58,9 +68,11 @@ gcn = gcn.to(device).float()
 g = g.to(device)
 
 # optimizer needs to be constructed AFTER the model was moved to GPU
-optimizer = th.optim.Adam(gcn.parameters(), lr=0.02)
+optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
+scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 history = []
 length = len(str(epochs))
+print(device)
 print("#### TRAINING START ####")
 time_start = datetime.now()
 for epoch in range(epochs):
@@ -73,20 +85,27 @@ for epoch in range(epochs):
     optimizer.step()
     gcn.eval()
     with th.no_grad():
-        pred_val = np.argmax(gcn(g)[g.val_mask].cpu().numpy(), axis=1)
-        pred_train = np.argmax(gcn(g)[g.train_mask].cpu().numpy(), axis=1)
-        acc_val = accuracy_score(g.y.cpu()[g.val_mask].detach(), pred_val)
-        acc_train = accuracy_score(g.y.cpu()[g.train_mask].detach(), pred_train)
+        logits = gcn(g)
+        val_loss = criterion(logits[g.val_mask], g.y[g.val_mask])
+        pred_val = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
+        pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
+        acc_val = accuracy_score(g.y.cpu()[g.val_mask], pred_val)
+        acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
     history.append((loss.item(), acc_val))
+
+    # scheduler.step(val_loss)
+
     if epoch > 5 and history[-5][0] < history[-1][0] and EARLY_STOPPING:
         print("early stopping activated!")
         break
 
 print("Optimization finished!")
-print("Saving model...")
-th.save(gcn, f"models/gcn_{int(time.time())}.nn")
+if save_model:
+    print("Saving model...")
+    th.save(gcn, f"models/gcn_{int(time.time())}.nn")
+"""
 with th.no_grad():
     pred_test = np.argmax(gcn(g)[g.test_mask].cpu().detach().numpy(), axis=1)
     acc_test = accuracy_score(g.y.cpu()[g.test_mask].detach(), pred_test)
@@ -97,9 +116,9 @@ print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")
 print("Confusion matrix:")
 print(conf_mat)
-
+"""
 time_end = datetime.now()
-print(f"Training took {time_end - time_start} for {epoch} epochs.")
+print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
 loss, acc = zip(*history)
 
