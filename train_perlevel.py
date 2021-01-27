@@ -12,6 +12,8 @@ from torch_geometric import nn
 
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import JumpingKnowledgeNetwork, GCN
+
+
 CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 200
