@@ -39,7 +39,7 @@ n_hidden_step = 1
 lr_size = ((lr_stop - lr_start) / lr_step + 1)
 do_size = ((do_stop - do_start) / do_step + 1)
 n_hidden_size = ((n_hidden_stop - n_hidden_start) / n_hidden_step + 1)
-frameIterator = 0;
+frameIterator = 0
 maxExpSize = lr_size*do_size*n_hidden_size
 
 # resulting dataframe containing all result values
