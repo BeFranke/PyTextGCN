@@ -63,7 +63,7 @@ class EGCAN(nn.Module):
         for i in range(n_gcn - 1):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
 
-        self.layers.append(GATConv(n_hidden_gcn, out_channels, heads=5, concat=False))
+        self.layers.append(GATConv(n_hidden_gcn, out_channels, heads=2, concat=False))
 
     def forward(self, g):
         x = g.x
@@ -71,12 +71,12 @@ class EGCAN(nn.Module):
         x = nn.SELU()(x)
         x = nn.functional.dropout(x, p=self.dropout, training=self.training)
         for i, layer in enumerate(self.layers[1:]):
-            if i < len(self.layers) - 1:
+            if i < len(self.layers) - 2:
                 # x = self.activation(x)    # GCN includes RELU
                 x = layer(x, g.edge_index, g.edge_attr)
                 x = nn.functional.dropout(x, p=self.dropout, training=self.training)
             else:
-                x = layer(x)
+                x = layer(x, g.edge_index)
 
         # return nn.Softmax(dim=-1)(x)
         return x

@@ -63,7 +63,7 @@ else:
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
 # gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
-gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
+gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, embedding_dim=500)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
