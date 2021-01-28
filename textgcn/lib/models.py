@@ -82,6 +82,32 @@ class EGCAN(nn.Module):
         return x
 
 
+class GCAN(nn.Module):
+    def __init__(self, in_channels, out_channels, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU,
+                 dropout=0.5):
+        super().__init__()
+        self.activation = activation()
+        self.dropout = dropout
+        self.layers = nn.ModuleList([nn.Linear(in_channels, n_hidden_gcn)])
+        for i in range(n_gcn - 1):
+            self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
+
+        self.layers.append(GATConv(n_hidden_gcn, out_channels, heads=5, concat=False))
+
+    def forward(self, g):
+        x = g.x
+        for i, layer in enumerate(self.layers):
+            if i < len(self.layers) - 1:
+                # x = self.activation(x)    # GCN includes RELU
+                x = layer(x, g.edge_index, g.edge_attr)
+                x = nn.functional.dropout(x, p=self.dropout, training=self.training)
+            else:
+                x = layer(x, g.edge_index)
+
+        # return nn.Softmax(dim=-1)(x)
+        return x
+
+
 class JumpingKnowledgeNetwork(nn.Module):
     def __init__(self, in_channels, out_channels, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU, dropout=0.5):
         super().__init__()
