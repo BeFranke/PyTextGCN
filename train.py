@@ -45,7 +45,8 @@ y = y + y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.9)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.6)
+# t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 if not ls:
     g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
@@ -59,7 +60,8 @@ else:
 
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64)
+gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -105,7 +107,7 @@ print("Optimization finished!")
 if save_model:
     print("Saving model...")
     th.save(gcn, f"models/gcn_{int(time.time())}.nn")
-"""
+
 with th.no_grad():
     pred_test = np.argmax(gcn(g)[g.test_mask].cpu().detach().numpy(), axis=1)
     acc_test = accuracy_score(g.y.cpu()[g.test_mask].detach(), pred_test)
@@ -116,7 +118,7 @@ print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")
 print("Confusion matrix:")
 print(conf_mat)
-"""
+
 time_end = datetime.now()
 print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
