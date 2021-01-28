@@ -17,12 +17,12 @@ from textgcn.lib.models import *
 
 mode_hparams = {
     'flat': {'lr': 0.025, 'dropout': 0.5},
-    'lvl1': {'lr': 0.07, 'dropout': 0.7},
-    'lvl2': {'lr': 0.2, 'dropout': 0.55}
+    'lvl1': {'lr': 0.07, 'dropout': 0.5},
+    'lvl2': {'lr': 0.2, 'dropout': 0.5}
     # to be extended
 }
 
-N_HIDDEN = 16
+N_HIDDEN = 64
 cpu = th.device('cpu')
 gpu = th.device('cuda')
 
