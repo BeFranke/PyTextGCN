@@ -88,8 +88,8 @@ class GCAN(nn.Module):
         super().__init__()
         self.activation = activation()
         self.dropout = dropout
-        self.layers = nn.ModuleList([nn.Linear(in_channels, n_hidden_gcn)])
-        for i in range(n_gcn - 1):
+        self.layers = nn.ModuleList([GCNConv(in_channels, n_hidden_gcn, add_self_loops=True)])
+        for i in range(n_gcn):
             self.layers.append(GCNConv(n_hidden_gcn, n_hidden_gcn, add_self_loops=True))
 
         self.layers.append(GATConv(n_hidden_gcn, out_channels, heads=5, concat=False))
