@@ -41,6 +41,7 @@ class EGCN(nn.Module):
         x = g.x
         x = self.layers[0](x)
         x = nn.SELU()(x)
+        x = nn.functional.dropout(x, p=self.dropout, training=self.training)
         for i, layer in enumerate(self.layers[1:]):
             x = layer(x, g.edge_index, g.edge_attr)
             if i < len(self.layers) - 1:

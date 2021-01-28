@@ -15,11 +15,11 @@ from textgcn.lib.models import *
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 150
+epochs = 500
 train_val_split = 0.1
-lr = 0.05
+lr = 0.001
 save_model = False
-dropout = 0.5
+dropout = 0.7
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -27,14 +27,14 @@ test = pd.read_csv("data/amazon/test.csv")
 save_path = "textgcn/graphs/"
 # save_path = None
 x = train['Text'].tolist()
-y = train['Cat1'].tolist()
+y = train['Cat2'].tolist()
 
 # Train/val split
 val_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
 train_idx = np.array([x for x in range(len(x)) if x not in val_idx])
 
 x_test = test['Text'].tolist()
-y_test = test['Cat1'].tolist()
+y_test = test['Cat2'].tolist()
 
 test_idx = np.arange(len(x) + 1, len(x) + len(x_test))
 
@@ -45,10 +45,11 @@ y = y + y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.6)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=10, save_path=None, verbose=1, max_df=0.6)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
-if not ls:
+# if not ls:
+if True:
     g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
     print("Graph built!")
 else:
@@ -60,7 +61,7 @@ else:
 
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
-gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
 # gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
@@ -71,7 +72,7 @@ g = g.to(device)
 
 # optimizer needs to be constructed AFTER the model was moved to GPU
 optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
-scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+# scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 history = []
 length = len(str(epochs))
 print(device)
