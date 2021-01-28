@@ -61,8 +61,9 @@ else:
 
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
-gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
+# gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
 # gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
