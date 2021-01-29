@@ -15,11 +15,11 @@ from textgcn.lib.models import *
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 500
+epochs = 1000
 train_val_split = 0.1
-lr = 0.05
+lr = 0.005
 save_model = False
-dropout = 0.7
+dropout = 0.5
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -45,7 +45,7 @@ y = y + y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=10, save_path=None, verbose=1, max_df=0.6)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=0.6)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 # if not ls:
@@ -62,10 +62,10 @@ else:
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, embedding_dim=1000)
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=128)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
 # gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, embedding_dim=500)
 # gcn = GCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, n_gcn=1)
-gcn = SGAT(g.x.shape[1], len(np.unique(y)), n_hidden=16, heads=4, dropout=dropout)
+# gcn = SGAT(g.x.shape[1], len(np.unique(y)), n_hidden=32, heads=4, dropout=dropout, embedding=100)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 

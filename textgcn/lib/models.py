@@ -22,7 +22,8 @@ class GCN(nn.Module):
                 # x = self.activation(x)    # GCN includes RELU
                 x = nn.functional.dropout(x, p=self.dropout, training=self.training)
 
-        return nn.Softmax(dim=-1)(x)
+        # return nn.Softmax(dim=-1)(x)
+        return x
 
 
 class SGAT(nn.Module):
