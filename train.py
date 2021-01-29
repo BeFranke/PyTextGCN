@@ -57,15 +57,9 @@ else:
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
     print(f"n_classes={len(np.unique(g.y))}")
 
-# gcn = JumpingGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
-
-# gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, embedding_dim=1000)
 gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
-# gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, embedding_dim=500)
-# gcn = GCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, n_gcn=1)
-# gcn = SGAT(g.x.shape[1], len(np.unique(y)), n_hidden=32, heads=4, dropout=dropout, embedding=100)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
