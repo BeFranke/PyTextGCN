@@ -65,7 +65,7 @@ else:
 # gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=128)
 # gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, embedding_dim=500)
 # gcn = GCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, n_gcn=1)
-gcn = SGAT(g.x.shape[1], len(np.unique(y)), n_hidden=32, heads=1, dropout=dropout)
+gcn = SGAT(g.x.shape[1], len(np.unique(y)), n_hidden=16, heads=4, dropout=dropout)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 

@@ -26,15 +26,25 @@ class GCN(nn.Module):
 
 
 class SGAT(nn.Module):
-    def __init__(self, in_channels, out_channels, K=2, n_hidden=64, dropout=0.5, heads=2, activation=nn.SELU):
+    def __init__(self, in_channels, out_channels, K=2, n_hidden=64, dropout=0.5, heads=2, activation=nn.SELU,
+                 embedding=500):
         super().__init__()
         self.dropout = dropout
         self.activation = activation()
-        self.sg = SGConv(in_channels, n_hidden, K)
+        if embedding is not None:
+            self.dense = nn.Linear(in_channels, embedding)
+            self.sg = SGConv(embedding, n_hidden, K)
+        else:
+            self.dense = None
+            self.sg = SGConv(in_channels, n_hidden, K)
         self.gat = GATConv(n_hidden, out_channels, heads, concat=False)
 
     def forward(self, g):
         x = g.x
+        if self.dense is not None:
+            x = self.dense(x)
+            x = self.activation(x)
+            x = nn.functional.dropout(x, p=self.dropout, training=self.training)
         x = self.sg(x, g.edge_index, g.edge_attr)
         x = self.activation(x)
         x = nn.functional.dropout(x, p=self.dropout, training=self.training)
