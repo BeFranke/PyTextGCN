@@ -1,6 +1,6 @@
 from torch import nn
 import torch as th
-from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv, DeepGCNLayer, GATConv
+from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv, DeepGCNLayer, GATConv, SGConv
 
 
 class GCN(nn.Module):
@@ -23,6 +23,23 @@ class GCN(nn.Module):
                 x = nn.functional.dropout(x, p=self.dropout, training=self.training)
 
         return nn.Softmax(dim=-1)(x)
+
+
+class SGAT(nn.Module):
+    def __init__(self, in_channels, out_channels, K=2, n_hidden=64, dropout=0.5, heads=2, activation=nn.SELU):
+        super().__init__()
+        self.dropout = dropout
+        self.activation = activation()
+        self.sg = SGConv(in_channels, n_hidden, K)
+        self.gat = GATConv(n_hidden, out_channels, heads, concat=False)
+
+    def forward(self, g):
+        x = g.x
+        x = self.sg(x, g.edge_index, g.edge_attr)
+        x = self.activation(x)
+        x = nn.functional.dropout(x, p=self.dropout, training=self.training)
+        x = self.gat(x, g.edge_index)
+        return x
 
 
 class EGCN(nn.Module):
