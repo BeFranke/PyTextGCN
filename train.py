@@ -17,7 +17,7 @@ CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 500
 train_val_split = 0.1
-lr = 0.001
+lr = 0.05
 save_model = False
 dropout = 0.7
 
@@ -61,10 +61,10 @@ else:
 
 # gcn = HierarchyGNN(in_feats=g.x.shape[1], n_classes=len(np.unique(y)), n_hidden=64, mlp_hidden=0, mlp_layers=1, graph_layer=nn.GraphConv)
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
-# gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
-# gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+# gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, embedding_dim=1000)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=128)
 # gcn = EGCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, embedding_dim=500)
-gcn = GCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32)
+# gcn = GCAN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, n_gcn=1)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -73,8 +73,11 @@ gcn = gcn.to(device).float()
 g = g.to(device)
 
 # optimizer needs to be constructed AFTER the model was moved to GPU
-optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
-# scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+optimizer = th.optim.Adam(gcn.parameters(), lr=lr, amsgrad=True)
+# optimizer = th.optim.SGD(gcn.parameters(), lr=0.05)
+# optimizer = th.optim.Adadelta(gcn.parameters())
+scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, factor=0.5, patience=15, cooldown=5)
+# scheduler = th.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.5, step_size_up=50)
 history = []
 length = len(str(epochs))
 print(device)
@@ -94,11 +97,11 @@ for epoch in range(epochs):
         val_loss = criterion(logits[g.val_mask], g.y[g.val_mask])
         pred_val = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
         pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-        acc_val = accuracy_score(g.y.cpu()[g.val_mask], pred_val)
+        f1_val = f1_score(g.y.cpu()[g.val_mask], pred_val, average='macro')
         acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
-              f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
-    history.append((loss.item(), acc_val))
+              f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+    history.append((loss.item(), f1_val))
 
     # scheduler.step(val_loss)
 
