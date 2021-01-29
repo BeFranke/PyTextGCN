@@ -26,7 +26,7 @@ class GCN(nn.Module):
 
 
 class SGAT(nn.Module):
-    def __init__(self, in_channels, out_channels, K=2, n_hidden=64, dropout=0.5, heads=2, activation=nn.SELU,
+    def __init__(self, in_channels, out_channels, K=2, n_hidden=64, dropout=0.5, heads=4, activation=nn.SELU,
                  embedding=500):
         super().__init__()
         self.dropout = dropout
@@ -37,7 +37,8 @@ class SGAT(nn.Module):
         else:
             self.dense = None
             self.sg = SGConv(in_channels, n_hidden, K)
-        self.gat = GATConv(n_hidden, out_channels, heads, concat=False)
+        self.gat = GATConv(n_hidden, int(n_hidden / heads), heads, concat=True)
+        self.lin = nn.Linear(int(n_hidden / heads) * heads, out_channels)
 
     def forward(self, g):
         x = g.x
@@ -49,6 +50,8 @@ class SGAT(nn.Module):
         x = self.activation(x)
         x = nn.functional.dropout(x, p=self.dropout, training=self.training)
         x = self.gat(x, g.edge_index)
+        x = nn.functional.dropout(x, p=self.dropout, training=self.training)
+        x = self.lin(x)
         return x
 
 
