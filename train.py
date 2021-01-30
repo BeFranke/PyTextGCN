@@ -15,11 +15,11 @@ from textgcn.lib.models import *
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 1000
+epochs = 500
 train_val_split = 0.1
 lr = 0.005
 save_model = False
-dropout = 0.5
+dropout = 0.6
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -57,9 +57,9 @@ else:
     print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
     print(f"n_classes={len(np.unique(g.y))}")
 
-# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, dropout=0.7, activation=th.nn.SELU)
-# gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=64, embedding_dim=1000)
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100)
+# gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout, activation=th.nn.SELU)
+# gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, embedding_dim=2000, dropout=dropout)
+gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
