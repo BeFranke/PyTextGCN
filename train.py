@@ -17,7 +17,7 @@ CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 500
 train_val_split = 0.1
-lr = 0.005
+lr = 0.001
 save_model = False
 dropout = 0.6
 
@@ -36,7 +36,7 @@ train_idx = np.array([x for x in range(len(x)) if x not in val_idx])
 x_test = test['Text'].tolist()
 y_test = test['Cat2'].tolist()
 
-test_idx = np.arange(len(x) + 1, len(x) + len(x_test))
+test_idx = np.arange(len(x), len(x) + len(x_test))
 
 # Combine training & test data set
 x = x + x_test

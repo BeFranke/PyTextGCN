@@ -17,8 +17,9 @@ CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 500
 train_val_split = 0.1
-lr = 0.2
+lr = 0.005
 save_model = False
+dropout = 0.6
 
 # set to "false" to evaluate flat approach
 hierarchical_feats = True
@@ -40,7 +41,7 @@ x_test = test['Text'].tolist()
 y_test = test['Cat2'].tolist()
 y_test_top = test['Cat1'].tolist()
 
-test_idx = np.arange(len(x) + 1, len(x) + len(x_test))
+test_idx = np.arange(len(x), len(x) + len(x_test))
 
 y = y + y_test
 y_top = y_top + y_test_top
@@ -50,7 +51,7 @@ y = LabelEncoder().fit_transform(y)
 y_top = LabelEncoder().fit_transform(y_top)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.9)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.6)
 hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
 
 
@@ -92,7 +93,7 @@ for epoch in range(epochs):
         pred_val = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
         pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
         acc_val = accuracy_score(g.y.cpu()[g.val_mask], pred_val)
-        acc_train = accuracy_score(g.y.cpu()[g.val_mask], pred_train)
+        acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
     history.append((loss.item(), acc_val))
