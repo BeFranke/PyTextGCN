@@ -28,7 +28,7 @@ lrs = [0.0001, 0.001, 0.01, 0.1]
 #dropout
 dos = [0.5, 0.7]
 # df_max
-dfs = [0.5, 0.7, 0.9]
+dfs = [0.5, 0.6, 0.7]
 
 models = [GCN, EGCN]
 
@@ -38,7 +38,7 @@ n_hidden = 100
 # resulting dataframe containing all result values
 maxExpSize = len(lrs) * len(dos) * len(dfs) * len(models)
 resultDf = pd.DataFrame(index= range(1, maxExpSize, 1),
-                        columns= ["LR", "DO", "max_df", "mean acc", "std acc"])
+                        columns= ["LR", "DO", "max_df", "model", "mean f1", "std f1"])
 resultDf.fillna(0)
 
 
@@ -72,6 +72,7 @@ for mdf in dfs:
     for dropout in dos:
         for lr in lrs:
             for model in models:
+                model_name = "GCN" if model == GCN else "EGCN"
                 try:
                     scores = np.zeros(k_split)
                     for i, (train, test) in enumerate(kf.split(indizes)):
@@ -93,8 +94,8 @@ for mdf in dfs:
 
                         ###################################  Training  ######################################
                         length = len(str(epochs))
-                        print("[{}/{}] ----- split {} -- lr: {} -- do: {} - n_hidden: {}"
-                              .format(frameIterator+1, maxExpSize, i, lr, dropout, n_hidden))
+                        print("[{}/{}] ----- split {} -- lr: {} -- do: {} - max_df: {}"
+                              .format(frameIterator+1, maxExpSize, i, lr, dropout, mdf))
                         time_start = datetime.now()
 
                         for epoch in range(epochs):
@@ -107,22 +108,22 @@ for mdf in dfs:
                             gcn.eval()
                             with th.no_grad():
                                 logits = gcn(g)
-                            val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
-                            pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
-                            pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-                            acc_val = accuracy_score(g.y.cpu()[g.test_mask], pred_val)
-                            acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
+                                val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
+                                pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
+                                pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
+                                f1_val = f1_score(g.y.cpu()[g.test_mask], pred_val)
+                                acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
                             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
-                            f"training accuracy: {acc_train: .3f}, val_accuracy: {acc_val: .3f}")
-                        scores[i] = acc_val
+                            f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+                        scores[i] = f1_val
 
                     frameIterator += 1
                     # Dataframe structure: "LR", "DO", "n_hidden", "accuracy mean", "accuracy std"
 
-                    resultDf.loc[frameIterator] = [lr, dropout, n_hidden, scores.mean(), scores.std()]
+                    resultDf.loc[frameIterator] = [lr, dropout, mdf, model_name, scores.mean(), scores.std()]
                 except RuntimeError as e:
                     print("CUDA ran out of memory. Setting NaN.")
-                    resultDf.loc[frameIterator] = [lr, dropout, n_hidden, np.nan, np.nan]
+                    resultDf.loc[frameIterator] = [lr, dropout, mdf, model_name, np.nan, np.nan]
 
 timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
 csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
