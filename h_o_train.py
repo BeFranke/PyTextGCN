@@ -44,8 +44,6 @@ resultDf.fillna(0)
 
 train = pd.read_csv("data/amazon/train.csv")
 
-#save_path = "textgcn/graphs/"
-save_path = None
 x = train['Text'].tolist()
 y = train[lable_category].tolist()
 
@@ -58,19 +56,19 @@ print("Data loaded!")
 
 ################################################  Text to Graph ################################################
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.9)
-
-g = t2g.fit_transform(x, y, test_idx=test_idx)
-print("Graph built!")
-
-# Mask for doc nodes
-mask = th.logical_or(g.train_mask,  g.test_mask)
-
-indizes  = th.nonzero(mask)
 kf = KFold(n_splits=k_split, shuffle=True)
 frameIterator = 0
 
 for mdf in dfs:
+    t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
+
+    g = t2g.fit_transform(x, y, test_idx=test_idx)
+    print("Graph built!")
+
+    # Mask for doc nodes
+    mask = th.logical_or(g.train_mask, g.test_mask)
+
+    indizes = th.nonzero(mask)
     for dropout in dos:
         for lr in lrs:
             for model in models:
