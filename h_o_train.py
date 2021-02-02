@@ -58,6 +58,8 @@ print("Data loaded!")
 
 kf = KFold(n_splits=k_split, shuffle=True)
 frameIterator = 0
+timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
+csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
 
 for mdf in dfs:
     t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
@@ -76,6 +78,8 @@ for mdf in dfs:
                 try:
                     scores = np.zeros(k_split)
                     for i, (train, test) in enumerate(kf.split(indizes)):
+                        train = train + g.n_vocab
+                        test = test + g.n_vocab
                         g.test_mask[:] = 0
                         g.test_mask[test] = 1
                         g.train_mask[:] = 0
@@ -124,9 +128,9 @@ for mdf in dfs:
                 except RuntimeError as e:
                     print("CUDA ran out of memory. Setting NaN.")
                     resultDf.loc[frameIterator] = [lr, dropout, mdf, model_name, np.nan, np.nan]
+                resultDf.to_csv(csv_name, encoding='utf-8')
 
-timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
-csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
+
 resultDf.to_csv(csv_name, encoding='utf-8')
 
 print("Optimization finished!")

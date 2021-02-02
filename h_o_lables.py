@@ -117,6 +117,8 @@ for classifier in range(num_labels):
             for lr in np.arange(lr_start, lr_stop + lr_step, lr_step):
                 scores = np.zeros(k_split)
                 for i, (train, test) in enumerate(kf.split(indices)):
+                    train = train + g.n_vocab
+                    test = test + g.n_vocab
                     g.test_mask[:] = 0
                     g.test_mask[indices[test]] = 1
                     g.train_mask[:] = 0
