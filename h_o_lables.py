@@ -1,18 +1,10 @@
-# TODO adapt this
-
-
-import os
-import time
 from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import KFold
-import torch as th
-from matplotlib import pyplot as plt
-from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
 from sklearn.preprocessing import LabelEncoder
-from torch_geometric import nn
 
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import *
