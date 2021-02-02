@@ -111,7 +111,7 @@ for mdf in dfs:
                                 val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
                                 pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
                                 pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-                                f1_val = f1_score(g.y.cpu()[g.test_mask], pred_val)
+                                f1_val = f1_score(g.y.cpu()[g.test_mask], pred_val, average="macro")
                                 acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
                             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                             f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
