@@ -26,7 +26,7 @@ class GCN(nn.Module):
 
 
 class EGCN(nn.Module):
-    def __init__(self, in_channels, out_channels, embedding_dim=1000, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU,
+    def __init__(self, in_channels, out_channels, embedding_dim=2000, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU,
                  dropout=0.5):
         super().__init__()
         self.activation = activation()
