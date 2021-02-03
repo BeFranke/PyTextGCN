@@ -19,7 +19,7 @@ save_model = False
 label_category = "Cat2"
 #Hyperparameters to optimize
 #learning rate
-lrs = [0.0001, 0.001, 0.01, 0.1]
+lrs = [0.001, 0.005, 0.01, 0.05]
 #dropout
 dos = [0.5, 0.7]
 # df_max
