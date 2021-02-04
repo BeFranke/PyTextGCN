@@ -21,7 +21,7 @@ k_split = 3
 
 # lr = 0.2
 save_model = False
-lable_category = "Cat1"
+lable_category = "Cat2"
 #Hyperparameters to optimize
 #learning rate
 lrs = [0.001, 0.005, 0.01, 0.05]
@@ -59,7 +59,8 @@ print("Data loaded!")
 kf = KFold(n_splits=k_split, shuffle=True)
 frameIterator = 0
 timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
-csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
+# csv_name = "Lvl_HypOpt_" + lable_category + "_" + timestamp + ".csv"
+csv_name = "Flat_HypOpt_" + lable_category + "_" + timestamp + ".csv"
 
 for mdf in dfs:
     t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
