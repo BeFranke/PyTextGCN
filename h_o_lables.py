@@ -70,7 +70,7 @@ csv_name = "HypOpt_Labels_" + label_category + "_" + timestamp + ".csv"
 
 ################################################  Text to Graph ################################################
 for mdf in dfs:
-    t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=mdf)
+    t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
 
     for classifier in range(num_labels):
         # get index of all labels with category n
@@ -81,14 +81,14 @@ for mdf in dfs:
 
         kf = KFold(n_splits=k_split, shuffle=True)
 
-        print(np.unique(g.y[g.test_mask], return_counts=True))
-        print(np.unique(g.y, return_counts=True))
+        # print(np.unique(g.y[g.test_mask], return_counts=True))
+        # print(np.unique(g.y, return_counts=True))
         indices = th.nonzero(th.from_numpy(mask)) + g.n_vocab
 
 
         # relabel the selected labels in ascending order
         g.y[indices] = th.from_numpy(LabelEncoder().fit_transform(th.squeeze(g.y[indices])))[:, None]
-
+        print(np.unique(g.y[indices]))
         for model in models:
             model_name = "GCN" if model == GCN else "EGCN"
             for dropout in dos:
@@ -97,8 +97,6 @@ for mdf in dfs:
                     classifier_name = f"classifier_{classifier}"
                     try:
                         for i, (train, test) in enumerate(kf.split(indices)):
-                            train = train + g.n_vocab
-                            test = test + g.n_vocab
                             g.test_mask[:] = 0
                             g.test_mask[indices[test]] = 1
                             g.train_mask[:] = 0
