@@ -10,9 +10,9 @@ from textgcn import Text2GraphTransformer
 from textgcn.lib.models import *
 
 CPU_ONLY = False
-epochs = 100
+epochs = 500
 train_val_split = 0.1
-k_split = 5
+k_split = 3
 
 # lr = 0.2
 save_model = False
@@ -74,7 +74,7 @@ for mdf in dfs:
 
     for classifier in range(num_labels):
         # get index of all labels with category n
-        available_labels = np.nonzero(labels[classifier])[0]
+        # available_labels = np.nonzero(labels[classifier])[0]
         mask = y_top == classifier
         # build the graph on the basis of the chosen indices
         g = t2g.fit_transform(x, y, test_idx=[])
@@ -87,7 +87,10 @@ for mdf in dfs:
 
 
         # relabel the selected labels in ascending order
-        g.y[indices] = th.from_numpy(LabelEncoder().fit_transform(th.squeeze(g.y[indices])))[:, None]
+        le = LabelEncoder()
+        newlabels = th.from_numpy(le.fit_transform(th.squeeze(g.y[indices])))[:, None]
+        g.y[:] = -1
+        g.y[indices] = newlabels
         print(np.unique(g.y[indices]))
         for model in models:
             model_name = "GCN" if model == GCN else "EGCN"
