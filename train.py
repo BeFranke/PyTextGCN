@@ -13,13 +13,28 @@ from torch_geometric import nn
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import *
 
+"""
+using optimized hyperparameters
+"""
+
 CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 500
 train_val_split = 0.1
-lr = 0.001
+lr = 0.05
 save_model = False
-dropout = 0.6
+dropout = 0.7
+max_df = 0.7
+seed = 42
+result_file = "results.csv"
+
+np.random.seed(seed)
+th.random.manual_seed(seed)
+
+try:
+    df = pd.read_csv(result_file)
+except:
+    df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
 
 train = pd.read_csv("data/amazon/train.csv")
 test = pd.read_csv("data/amazon/test.csv")
@@ -45,7 +60,7 @@ y = y + y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=0.6)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=max_df)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 # if not ls:
@@ -123,6 +138,10 @@ print(conf_mat)
 time_end = datetime.now()
 print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
+i = df.index.max() + 1 if df.index.max() != np.nan else 0
+df.loc[i] = [seed, "GCN" if isinstance(gcn, GCN) else "EGCN", "flat", f1, acc_test]
+df.to_csv(result_file)
+
 loss, acc = zip(*history)
 
 fig, axs = plt.subplots(2)
@@ -131,3 +150,5 @@ axs[1].plot(acc, label="ValAcc")
 axs[0].legend()
 axs[1].legend()
 plt.show()
+
+
