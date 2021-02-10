@@ -19,7 +19,7 @@ save_model = False
 label_category = "Cat2"
 #Hyperparameters to optimize
 #learning rate
-lr = 0.001
+lr = 0.005
 #dropout
 do = 0.7
 # df_max
@@ -37,9 +37,9 @@ n_hidden = 100
 # DO = Drop out rate
 # mean acc = Mean accuracy on cross validation scores
 # std acc = standart derivation on cross validation scores
-resultDf = pd.DataFrame(index= range(1, int(maxExpSize + 1), 1),
-                        columns= ["2lc", "LR", "DO", "max_df", "model", "mean f1", "std f1"])
-resultDf.fillna(0)
+# resultDf = pd.DataFrame(index= range(1, int(maxExpSize + 1), 1),
+#                        columns= ["2lc", "LR", "DO", "max_df", "model", "mean f1", "std f1"])
+# resultDf.fillna(0)
 
 
 train = pd.read_csv("data/amazon/train.csv")
@@ -54,6 +54,7 @@ x_test = test['Text'].tolist()
 y_test = test['Cat2'].tolist()
 y_test_top = test['Cat1'].tolist()
 
+val_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
 test_idx = np.arange(len(x), len(x) + len(x_test))
 
 x = x + x_test
@@ -78,6 +79,7 @@ timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
 csv_name = "HypOpt_Labels_" + label_category + "_" + timestamp + ".csv"
 
 ################################################  Text to Graph ################################################
+scores = []
 
 t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=df)
 
@@ -86,11 +88,13 @@ for classifier in range(num_labels):
     # available_labels = np.nonzero(labels[classifier])[0]
     mask = y_top == classifier
     # build the graph on the basis of the chosen indices
-    g = t2g.fit_transform(x, y, test_idx=test_idx)
+    g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
 
     # print(np.unique(g.y[g.test_mask], return_counts=True))
     # print(np.unique(g.y, return_counts=True))
     indices = th.nonzero(th.from_numpy(mask)) + g.n_vocab
+    mask = th.zeros(len(g.y), dtype=th.bool)
+    mask[indices] = 1
 
 
     # relabel the selected labels in ascending order
@@ -101,7 +105,7 @@ for classifier in range(num_labels):
     print(np.unique(g.y[indices]))
 
     ########################################  define GCN  #####################################
-    gcn = model(g.x.shape[1], len(th.unique(g.y[g.train_mask])), n_hidden_gcn=n_hidden,
+    gcn = model(g.x.shape[1], len(th.unique(g.y[mask])), n_hidden_gcn=n_hidden,
                 dropout=do)
 
     criterion = th.nn.CrossEntropyLoss(reduction='mean')
@@ -109,7 +113,7 @@ for classifier in range(num_labels):
     device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
     gcn = gcn.to(device).float()
     g = g.to(device)
-
+    mask = mask.to(device)
 
     # optimizer needs to be constructed AFTER the model was moved to GPU
     optimizer = th.optim.Adam(gcn.parameters(), lr=lr)
@@ -118,23 +122,32 @@ for classifier in range(num_labels):
     length = len(str(epochs))
     time_start = datetime.now()
 
+    train_mask = th.logical_and(g.train_mask, mask)
+    val_mask = th.logical_and(g.val_mask, mask)
+    test_mask = th.logical_and(g.test_mask, mask)
+
     for epoch in range(epochs):
         gcn.train()
-        outputs = gcn(g)[g.train_mask]
-        loss = criterion(outputs, g.y[g.train_mask])
+        outputs = gcn(g)[train_mask]
+        loss = criterion(outputs, g.y[train_mask])
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
         gcn.eval()
         with th.no_grad():
             logits = gcn(g)
-        val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
-        pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
-        pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-        f1_val = f1_score(g.y.cpu()[g.test_mask], pred_val, average="macro")
-        acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
+        val_loss = criterion(logits[val_mask], g.y[val_mask])
+        pred_val = np.argmax(logits[val_mask].cpu().numpy(), axis=1)
+        pred_train = np.argmax(logits[train_mask].cpu().numpy(), axis=1)
+        f1_val = f1_score(g.y.cpu()[val_mask], pred_val, average="macro")
+        acc_train = accuracy_score(g.y.cpu()[train_mask], pred_train)
+        # f1_train = f1_score(g.y.cpu()[train_mask], pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
         f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
-
+    
+    scores += [f1_val]
     with open(f"models/amazon/lvl2-cat{classifier}", "wb") as f:
         th.save(gcn, f)
+
+print(scores)
+
