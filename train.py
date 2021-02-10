@@ -25,11 +25,14 @@ lr = 0.05
 save_model = False
 dropout = 0.7
 max_df = 0.7
-seed = 42
+seed = 44
 result_file = "results.csv"
-
+model = GCN
 np.random.seed(seed)
 th.random.manual_seed(seed)
+save_results = True
+labels = "Cat2"
+window_size=20
 
 try:
     df = pd.read_csv(result_file)
@@ -42,14 +45,14 @@ test = pd.read_csv("data/amazon/test.csv")
 save_path = "textgcn/graphs/"
 # save_path = None
 x = train['Text'].tolist()
-y = train['Cat2'].tolist()
+y = train[labels].tolist()
 
 # Train/val split
 val_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
 train_idx = np.array([x for x in range(len(x)) if x not in val_idx])
 
 x_test = test['Text'].tolist()
-y_test = test['Cat2'].tolist()
+y_test = test[labels].tolist()
 
 test_idx = np.arange(len(x), len(x) + len(x_test))
 
@@ -60,7 +63,7 @@ y = y + y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=max_df)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 # if not ls:
@@ -74,7 +77,7 @@ else:
 
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, embedding_dim=2000, dropout=dropout)
-gcn = GCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout)
+gcn = model(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -138,17 +141,8 @@ print(conf_mat)
 time_end = datetime.now()
 print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
-i = df.index.max() + 1 if df.index.max() != np.nan else 0
-df.loc[i] = [seed, "GCN" if isinstance(gcn, GCN) else "EGCN", "flat", f1, acc_test]
-df.to_csv(result_file)
-
-loss, acc = zip(*history)
-
-fig, axs = plt.subplots(2)
-axs[0].plot(loss, label="TrainLoss")
-axs[1].plot(acc, label="ValAcc")
-axs[0].legend()
-axs[1].legend()
-plt.show()
-
+if save_results:
+    i = df.index.max() + 1 if df.index.max() != np.nan else 0
+    df.loc[i] = {'seed': seed, 'model': "GCN" if isinstance(gcn, GCN) else "EGCN", 'hierarchy': "flat", 'f1-macro': f1, 'accuracy': acc_test}
+    df.to_csv(result_file)
 
