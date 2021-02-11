@@ -21,7 +21,7 @@ k_split = 3
 
 # lr = 0.2
 save_model = False
-lable_category = "Cat2"
+lable_category = "l3"
 #Hyperparameters to optimize
 #learning rate
 lrs = [0.001, 0.005, 0.01, 0.05]
@@ -50,7 +50,7 @@ x = train['text'].tolist()
 y = train[lable_category].tolist()
 
 x_val = val['text'].tolist()
-y_val = val['l3'].tolist()
+y_val = val[lable_category].tolist()
 
 val_idx = np.arange(len(x), len(x) + len(x_val))
 
@@ -58,7 +58,7 @@ x += x_val
 y += y_val
 
 x_test = test['text'].tolist()
-y_test = test['text'].tolist()
+y_test = test[lable_category].tolist()
 
 test_idx = np.arange(len(x), len(x) + len(x_test))
 
