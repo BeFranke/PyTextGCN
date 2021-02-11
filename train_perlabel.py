@@ -5,9 +5,10 @@ import pandas as pd
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import LabelEncoder
-
+import json
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import *
+from sys import argv
 
 CPU_ONLY = False
 epochs = 500
@@ -30,6 +31,9 @@ model = GCN
 #n_hidden
 n_hidden = 100
 
+seed = 42 if len(argv) < 2 else int(argv[1])
+th.random.manual_seed(seed)
+np.random.seed(seed)
 
 # resulting dataframe containing all result values
 # 2lc = second label classifier
@@ -82,7 +86,7 @@ csv_name = "HypOpt_Labels_" + label_category + "_" + timestamp + ".csv"
 scores = []
 
 t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=df)
-
+mapping = dict()
 for classifier in range(num_labels):
     # get index of all labels with category n
     # available_labels = np.nonzero(labels[classifier])[0]
@@ -100,6 +104,7 @@ for classifier in range(num_labels):
     # relabel the selected labels in ascending order
     le = LabelEncoder()
     newlabels = th.from_numpy(le.fit_transform(th.squeeze(g.y[indices])))[:, None]
+    mapping[classifier] = le.classes_.tolist()
     g.y[:] = -1
     g.y[indices] = newlabels
     print(np.unique(g.y[indices]))
@@ -149,5 +154,7 @@ for classifier in range(num_labels):
     with open(f"models/amazon/lvl2-cat{classifier}", "wb") as f:
         th.save(gcn, f)
 
-print(scores)
 
+print(scores)
+with open("models/amazon/class_mapping.json", "w") as f:
+    json.dump(mapping, f)

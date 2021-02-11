@@ -10,12 +10,12 @@ from textgcn import Text2GraphTransformer
 
 train_val_split = 0.1
 
-with open("models/amazon/lvl1") as f:
+with open("models/amazon/lvl1", "rb") as f:
     gcn1 = th.load(f)
 
 gcn2s = []
 for i in range(6):
-    with open(f"models/amazon/lvl2-cat{i}") as f:
+    with open(f"models/amazon/lvl2-cat{i}", "rb") as f:
         gcn2s += [th.load(f)]
 
 train = pd.read_csv("data/amazon/train.csv")
@@ -26,6 +26,9 @@ save_path = None
 x = train['Text'].tolist()
 y = train['Cat2'].tolist()
 y_top = train['Cat1'].tolist()
+
+device = th.device("cuda" if th.cuda.is_available() else "cpu") 
+cpu = th.device('cpu')
 
 # Train/val split
 val_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
@@ -48,27 +51,35 @@ print("Data loaded!")
 t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=0.6)
 
 g1 = t2g.fit_transform(x, y_top, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=None)
+g1 = g1.to(device)
+gcn1 = gcn1.to(device)
 
 with th.no_grad():
     pred_test = np.argmax(gcn1(g1)[g1.test_mask].cpu().detach().numpy(), axis=1)
 
-g2 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=None)
+gcn1 = gcn1.to(cpu)
 
-predictions = np.zeros(len(y))
+g2 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=None)
+g2 = g2.to(device)
+
+predictions = np.zeros(len(g2.y))
 predictions[:] = -1
 
 with open("models/amazon/class_mapping.json") as f:
     mapping = json.load(f)
 
 for i, gcn in enumerate(gcn2s):
-    mask = th.logical_and((g1.y == i), g2.test_mask)
+    gcn = gcn.to(device)
+    mask = th.logical_and((g1.y == i), g2.test_mask).cpu().numpy()
     pred = np.argmax(gcn(g2)[mask].cpu().detach().numpy(), axis=1)
+    assert len(pred) > 0
     for j in range(len(pred)):
-        pred[j] = mapping[i][pred[j]]
+        pred[j] = mapping[str(i)][pred[j]]
     predictions[mask] = pred
+    del gcn
 
-acc = accuracy_score(g2.y[g2.test_mask], predictions)
-f1 = f1_score(g2.y[g2.test_mask], predictions, average="macro")
+acc = accuracy_score(g2.y[g2.test_mask].cpu().numpy(), predictions[g2.test_mask.cpu().numpy()])
+f1 = f1_score(g2.y[g2.test_mask].cpu().numpy(), predictions[g2.test_mask.cpu().numpy()], average="macro")
 
 print(f"test accuracy: {acc}")
 print(f"test f1-macro: {f1}")
