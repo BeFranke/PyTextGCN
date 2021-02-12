@@ -13,67 +13,65 @@ from torch_geometric import nn
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import *
 
-"""
-TODO
-"""
 
-CPU_ONLY = False
+
+CPU_ONLY = True
 EARLY_STOPPING = False
 epochs = 500
 train_val_split = 0.1
 lr = 0.05
 save_model = False
-dropout = 0.7
-max_df = 0.7
-seed = 44
-result_file = "results.csv"
+dropout = 0.5
+max_df = 0.4
+seed = 42
+result_file = "results_dbpedia.csv"
 model = GCN
 np.random.seed(seed)
 th.random.manual_seed(seed)
 save_results = True
-labels = "Cat2"
-window_size=20
+labels = "l3"
+window_size = 20
 
 try:
     df = pd.read_csv(result_file)
 except:
     df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
 
-train = pd.read_csv("data/amazon/train.csv")
-test = pd.read_csv("data/amazon/test.csv")
+train = pd.read_csv("data/dbpedia/DBPEDIA_train.csv")
+val = pd.read_csv("data/dbpedia/DBPEDIA_val.csv")
+test = pd.read_csv("data/dbpedia/DBPEDIA_test.csv")
 
-save_path = "textgcn/graphs/"
+save_path = None
 # save_path = None
-x = train['Text'].tolist()
+x = train['text'].tolist()
 y = train[labels].tolist()
 
-# Train/val split
-val_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
-train_idx = np.array([x for x in range(len(x)) if x not in val_idx])
+x_val = val['text'].tolist()
+y_val = val[labels].tolist()
 
-x_test = test['Text'].tolist()
+# Train/val split
+val_idx = np.arange(len(x), len(x) + len(x_val))
+
+x += x_val
+y += y_val
+
+x_test = test['text'].tolist()
 y_test = test[labels].tolist()
 
 test_idx = np.arange(len(x), len(x) + len(x_test))
 
-# Combine training & test data set
-x = x + x_test
-y = y + y_test
+x += x_test
+y += y_test
 
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=40, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
-# if not ls:
-if True:
-    g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
-    print("Graph built!")
-else:
-    g = t2g.load_graph(os.path.join(save_path, ls[0]))
-    print(f"Graph loaded from {os.path.join(save_path, ls[0])}!")
-    print(f"n_classes={len(np.unique(g.y))}")
+
+g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
+print("Graph built!")
 
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, embedding_dim=2000, dropout=dropout)
