@@ -32,7 +32,7 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
         print(f"Sequence length is {max_sent_len}")
     if verbose > 0:
         print("Padding and encoding text...")
-    X = np.array(jl.Parallel(n_jobs=8)(
+    X = np.array(jl.Parallel(n_jobs=n_jobs)(
         jl.delayed(
             lambda doc: [vocabulary[w] for w in doc] + [-1] * (max_sent_len - len(doc))
         )(doc) for doc in tqdm(X)

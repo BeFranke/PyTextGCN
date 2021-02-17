@@ -22,7 +22,7 @@ train_val_split = 0.1
 lr = 0.05
 save_model = False
 dropout = 0.5
-max_df = 0.4
+max_df = 0.3
 seed = 42
 result_file = "results_dbpedia.csv"
 model = GCN
@@ -66,7 +66,7 @@ y += y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=40, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=60, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 
