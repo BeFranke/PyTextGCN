@@ -28,7 +28,7 @@ lrs = [0.001, 0.005, 0.01, 0.05]
 #dropout
 dos = [0.5, 0.7]
 # df_max
-dfs = [0.5, 0.6, 0.7]
+dfs = [0.3]
 
 models = [GCN]
 
@@ -77,7 +77,7 @@ timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
 csv_name = "DBPEDIA_Flat_HypOpt_" + lable_category + "_" + timestamp + ".csv"
 
 for mdf in dfs:
-    t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
+    t2g = Text2GraphTransformer(n_jobs=1, min_df=50, save_path=None, verbose=1, max_df=mdf)
 
     g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
     print("Graph built!")
