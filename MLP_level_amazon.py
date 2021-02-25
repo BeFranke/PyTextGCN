@@ -56,11 +56,11 @@ class MLP(th.nn.Module):
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 50
+epochs = 500
 train_val_split = 0.1
 lr = 0.05
 dropout = 0.7
-seed = 42
+seed = 44
 result_file = "results.csv"
 model = MLP
 np.random.seed(seed)

@@ -140,7 +140,7 @@ print("Optimization finished!")
 
 with th.no_grad():
     x_test = x_test.to(device)
-    pred_test = np.argmax(model(x_test.cpu().detach().numpy(), axis=1))
+    pred_test = np.argmax(model(x_test).cpu().detach().numpy(), axis=1)
     acc_test = accuracy_score(y_test.cpu().detach(), pred_test)
     f1 = f1_score(y_test.cpu().detach(), pred_test, average='macro')
 
