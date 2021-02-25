@@ -57,7 +57,7 @@ result_file = "results.csv"
 model = MLP
 np.random.seed(seed)
 th.random.manual_seed(seed)
-save_results = True
+save_results = False
 labels = "Cat2"
 
 
@@ -172,7 +172,7 @@ encoders = []
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 
-for y_top_i in np.unique(y_top_train):
+for y_top_i in np.unique(y_top_train.cpu()):
     print(f"Processing top level label {y_top_i}")
     (x_train_i, y_train_i), (x_val_i, y_val_i), le = \
         select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_val, y_top_i)

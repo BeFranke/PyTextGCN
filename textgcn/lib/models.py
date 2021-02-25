@@ -1,7 +1,7 @@
 from torch import nn
 import torch as th
 from torch_geometric.nn import GCNConv, GraphConv, JumpingKnowledge, GENConv, DeepGCNLayer, GATConv, SGConv
-
+from typing import List
 
 class GCN(nn.Module):
     def __init__(self, in_channels, out_channels, n_gcn=2, n_hidden_gcn=64, activation=nn.ReLU, dropout=0.5):
