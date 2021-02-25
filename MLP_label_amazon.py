@@ -10,6 +10,20 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from textgcn.lib.models import MLP
 
+"""
+TODO
+"""
+
+
+def select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_val, y_top_i):
+    mask_train = y_top_train == y_top_i
+    mask_val = y_top_val == y_top_i
+    le = LabelEncoder()
+    y_train_out = le.fit_transform(y_train[mask_train])
+    y_val_out = le.transform(y_val[mask_val])
+    return (x_train[mask_train], y_train_out), (x_val[mask_val], y_val_out), le
+
+
 
 def csr_to_torch(csr):
     acoo = csr.tocoo()
@@ -34,7 +48,7 @@ def append_feats(feats, top_labels):
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 500
+epochs = 50
 train_val_split = 0.1
 lr = 0.05
 dropout = 0.7
@@ -152,41 +166,53 @@ val_hierarchy = oh.fit_transform(y_top_val.cpu().numpy().reshape(-1, 1))
 x_train = append_feats(x_train, train_hierarchy)
 x_val = append_feats(x_val, val_hierarchy)
 
-model2 = MLP(x_train.shape[1], len(np.unique(y_train)), [256, 128], dropout=dropout)
+l2models = []
+encoders = []
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
-
 device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
-model2 = model2.to(device).float()
-x_train = x_train.to(device).float()
-y_train = y_train.to(device)
-x_val = x_val.to(device).float()
 
-print(f"x_val shape: {x_val.shape}")
-print(f"x_train shape: {x_train.shape}")
+for y_top_i in np.unique(y_top_train):
+    print(f"Processing top level label {y_top_i}")
+    (x_train_i, y_train_i), (x_val_i, y_val_i), le = \
+        select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_val, y_top_i)
 
-# optimizer needs to be constructed AFTER the model was moved to GPU
-optimizer = th.optim.Adam(model2.parameters(), lr=lr)
-length = len(str(epochs))
-print("### Training start (Top-Level)! ###")
-for epoch in range(epochs):
-    model2.train()
-    outputs = model2(x_train)
-    loss = criterion(outputs, y_train)
-    # performance tip: try set_to_none=True
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-    optimizer.step()
-    model2.eval()
-    with th.no_grad():
-        logits = model2(x_train)
-        logits_val = model2(x_val)
-        pred_val = np.argmax(logits_val.cpu().numpy(), axis=1)
-        pred_train = np.argmax(logits.cpu().numpy(), axis=1)
-        f1_val = f1_score(y_val.cpu(), pred_val, average='macro')
-        acc_train = accuracy_score(y_train.cpu(), pred_train)
-        print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
-              f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+    encoders.append(le)
+    x_train_i = x_train_i.to(device).float()
+    y_train_i = y_train_i.to(device)
+    x_val_i = x_val_i.to(device).float()
+
+    model2 = MLP(x_train.shape[1], len(np.unique(y_train_i)), [256, 128], dropout=dropout)
+    l2models.append(model2)
+    model2 = model2.to(device).float()
+
+    print(f"x_val shape: {x_val.shape}")
+    print(f"x_train shape: {x_train.shape}")
+
+    # optimizer needs to be constructed AFTER the model was moved to GPU
+    optimizer = th.optim.Adam(model2.parameters(), lr=lr)
+    length = len(str(epochs))
+    print("### Training start (Top-Level)! ###")
+    for epoch in range(epochs):
+        model2.train()
+        outputs = model2(x_train_i)
+        loss = criterion(outputs, y_train_i)
+        # performance tip: try set_to_none=True
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+        model2.eval()
+        with th.no_grad():
+            logits = model2(x_train_i)
+            logits_val = model2(x_val_i)
+            pred_val = np.argmax(logits_val.cpu().numpy(), axis=1)
+            pred_train = np.argmax(logits.cpu().numpy(), axis=1)
+            f1_val = f1_score(y_val_i.cpu(), pred_val, average='macro')
+            acc_train = accuracy_score(y_train_i.cpu(), pred_train)
+            print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
+                  f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+
+    model2, x_train_i, y_train_i, x_val_i = map(lambda x: x.cpu(), [model2, x_train_i, y_train_i, x_val_i])
 
 print("Optimization finished!")
 
@@ -197,11 +223,16 @@ del y_val
 
 with th.no_grad():
     x_test = x_test.to(device)
-    top_pred = th.nn.Softmax()(model1(x_test))
-    x_test = append_feats(x_test, top_pred).to(device)
-    pred_test = np.argmax(model2(x_test).cpu(), axis=1)
-    acc_test = accuracy_score(y_test.cpu(), pred_test)
-    f1 = f1_score(y_test.cpu().detach(), pred_test, average='macro')
+    top_pred = np.argmax(th.nn.Softmax()(model1(x_test)).cpu(), axis=1)
+    predictions = np.zeros_like(y_test)
+    for y_i in np.unique(y_top_test):
+        mask = top_pred == y_i
+        model2 = l2models[y_i]
+        y_test[mask] = encoders[y_i].transform(y_test[mask])
+        predictions[mask] = np.argmax(model2(x_test[mask]).cpu(), axis=1)
+
+    acc_test = accuracy_score(y_test, predictions)
+    f1 = f1_score(y_test[mask], predictions, average='macro')
 
 print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")

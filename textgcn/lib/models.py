@@ -80,4 +80,25 @@ class JumpingKnowledgeNetwork(nn.Module):
 
         return x
 
+class MLP(th.nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, hidden: List[int], dropout: float = 0.5):
+        super().__init__()
+        self.dropout = th.nn.Dropout(p=dropout)
+        assert hidden
+        ls = [th.nn.Linear(in_channels, hidden[0])]
+        if len(hidden) > 1:
+            ls += [th.nn.Linear(hd1, hd2) for hd1, hd2 in zip(hidden, hidden[1:])]
+        ls += [th.nn.Linear(hidden[-1], out_channels)]
+        self.layers = th.nn.ModuleList(ls)
+        self.act = th.nn.SELU()
+
+    def forward(self, x):
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            if i < len(self.layers) - 1:
+                x = self.act(x)
+                x = self.dropout(x)
+
+        return x
+
 
