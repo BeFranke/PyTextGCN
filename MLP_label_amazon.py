@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Iterable
 
 import numpy as np
 import torch as th
@@ -10,9 +10,11 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
 from textgcn.lib.models import MLP
 
-"""
-TODO
-"""
+def torch_to_csr(X):
+    row, col = X.indices.numpy()
+    data = X.values.numpy()
+    shape = X.size.numpy()
+    return sp.csr_matrix(data, (row, col), shape=shape)
 
 
 def select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_val, y_top_i):
@@ -21,8 +23,9 @@ def select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_
     le = LabelEncoder()
     y_train_out = le.fit_transform(y_train[mask_train])
     y_val_out = le.transform(y_val[mask_val])
-    return (x_train[mask_train], y_train_out), (x_val[mask_val], y_val_out), le
-
+    x_train_csr = torch_to_csr(x_train)
+    x_val_csr = torch_to_csr(x_val)
+    return (csr_to_torch(x_train_csr[mask_train]), y_train_out), (csr_to_torch(x_val_csr[mask_val]), y_val_out), le
 
 
 def csr_to_torch(csr):
@@ -158,13 +161,6 @@ for epoch in range(epochs):
               f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
 
 print("Optimization finished!")
-
-oh = OneHotEncoder(sparse=False)
-train_hierarchy = oh.fit_transform(y_top_train.cpu().numpy().reshape(-1, 1))
-val_hierarchy = oh.fit_transform(y_top_val.cpu().numpy().reshape(-1, 1))
-
-x_train = append_feats(x_train, train_hierarchy)
-x_val = append_feats(x_val, val_hierarchy)
 
 l2models = []
 encoders = []
