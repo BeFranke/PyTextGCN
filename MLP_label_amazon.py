@@ -11,14 +11,15 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from textgcn.lib.models import MLP
 
 def torch_to_csr(X):
-    row, col = X.indices.numpy()
-    data = X.values.numpy()
-    shape = X.size.numpy()
-    return sp.csr_matrix(data, (row, col), shape=shape)
+    X = X.coalesce().cpu()
+    row, col = X.indices().numpy()
+    data = X.values().numpy()
+    shape = tuple(X.size())
+    return sp.csr_matrix((data, (row, col)), shape=shape)
 
 
 def select_relabel_documents(x_train, x_val, y_train, y_val, y_top_train, y_top_val, y_top_i):
-    mask_train = y_top_train == y_top_i
+    mask_train = (y_top_train == y_top_i).cpu()
     mask_val = y_top_val == y_top_i
     le = LabelEncoder()
     y_train_out = le.fit_transform(y_train[mask_train])
@@ -51,7 +52,7 @@ def append_feats(feats, top_labels):
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 50
+epochs = 500
 train_val_split = 0.1
 lr = 0.05
 dropout = 0.7
@@ -60,7 +61,7 @@ result_file = "results.csv"
 model = MLP
 np.random.seed(seed)
 th.random.manual_seed(seed)
-save_results = False
+save_results = True
 labels = "Cat2"
 
 
@@ -155,12 +156,10 @@ for epoch in range(epochs):
         logits_val = model1(x_val)
         pred_val = np.argmax(logits_val.cpu().numpy(), axis=1)
         pred_train = np.argmax(logits.cpu().numpy(), axis=1)
-        f1_val = f1_score(y_top_val.cpu(), pred_val, average='macro')
+        f1_val = f1_score(y_top_val, pred_val, average='macro')
         acc_train = accuracy_score(y_top_train.cpu(), pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
-
-print("Optimization finished!")
 
 l2models = []
 encoders = []
@@ -175,10 +174,10 @@ for y_top_i in np.unique(y_top_train.cpu()):
 
     encoders.append(le)
     x_train_i = x_train_i.to(device).float()
-    y_train_i = y_train_i.to(device)
+    y_train_i = th.from_numpy(y_train_i).to(device)
     x_val_i = x_val_i.to(device).float()
 
-    model2 = MLP(x_train.shape[1], len(np.unique(y_train_i)), [256, 128], dropout=dropout)
+    model2 = MLP(x_train.shape[1], len(th.unique(y_train_i)), [256, 128], dropout=dropout)
     l2models.append(model2)
     model2 = model2.to(device).float()
 
@@ -188,7 +187,7 @@ for y_top_i in np.unique(y_top_train.cpu()):
     # optimizer needs to be constructed AFTER the model was moved to GPU
     optimizer = th.optim.Adam(model2.parameters(), lr=lr)
     length = len(str(epochs))
-    print("### Training start (Top-Level)! ###")
+    print("### Training start! ###")
     for epoch in range(epochs):
         model2.train()
         outputs = model2(x_train_i)
@@ -203,7 +202,7 @@ for y_top_i in np.unique(y_top_train.cpu()):
             logits_val = model2(x_val_i)
             pred_val = np.argmax(logits_val.cpu().numpy(), axis=1)
             pred_train = np.argmax(logits.cpu().numpy(), axis=1)
-            f1_val = f1_score(y_val_i.cpu(), pred_val, average='macro')
+            f1_val = f1_score(y_val_i, pred_val, average='macro')
             acc_train = accuracy_score(y_train_i.cpu(), pred_train)
             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                   f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
@@ -223,12 +222,13 @@ with th.no_grad():
     predictions = np.zeros_like(y_test)
     for y_i in np.unique(y_top_test):
         mask = top_pred == y_i
-        model2 = l2models[y_i]
-        y_test[mask] = encoders[y_i].transform(y_test[mask])
-        predictions[mask] = np.argmax(model2(x_test[mask]).cpu(), axis=1)
+        model2 = l2models[y_i].to(device)
+        masked_test = csr_to_torch(torch_to_csr(x_test)[mask])
+        pred = np.argmax(model2(masked_test.to(device)).cpu(), axis=1)
+        predictions[mask] = encoders[y_i].inverse_transform(pred)
 
     acc_test = accuracy_score(y_test, predictions)
-    f1 = f1_score(y_test[mask], predictions, average='macro')
+    f1 = f1_score(y_test, predictions, average='macro')
 
 print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")
@@ -239,8 +239,6 @@ if save_results:
     df.loc[i] = {'seed': seed, 'model': "MLP", 'hierarchy': "per-level", 'f1-macro': f1,
                  'accuracy': acc_test}
     df.to_csv(result_file)
-
-
 
 
 
