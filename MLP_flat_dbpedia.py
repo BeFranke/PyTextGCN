@@ -22,7 +22,7 @@ epochs = 500
 train_val_split = 0.1
 lr = 0.05
 dropout = 0.7
-seed = 42
+seed = 44
 result_file = "results_dbpedia.csv"
 model = MLP
 np.random.seed(seed)
@@ -56,7 +56,7 @@ x_val = tfidf.transform(raw_val.tolist())
 y_val = y_val.tolist()
 
 
-raw_test = test['Text'].tolist()
+raw_test = test['text'].tolist()
 y_test = test[labels].tolist()
 
 x_test = tfidf.transform(raw_test)
