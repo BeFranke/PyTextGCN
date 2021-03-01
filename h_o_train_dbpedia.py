@@ -8,7 +8,7 @@ from sklearn.model_selection import KFold
 import torch as th
 from matplotlib import pyplot as plt
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix
-from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.preprocessing import LabelEncoder
 from torch_geometric import nn
 
 from textgcn import Text2GraphTransformer
@@ -18,19 +18,19 @@ CPU_ONLY = False
 epochs = 500
 train_val_split = 0.1
 k_split = 3
-lable_category = "Cat2"
 
 # lr = 0.2
 save_model = False
+lable_category = "l3"
 #Hyperparameters to optimize
 #learning rate
 lrs = [0.001, 0.005, 0.01, 0.05]
 #dropout
 dos = [0.5, 0.7]
 # df_max
-dfs = [0.5, 0.6, 0.7]
+dfs = [0.3]
 
-models = [GCN, EGCN]
+models = [GCN]
 
 #n_hidden
 n_hidden = 100
@@ -42,18 +42,30 @@ resultDf = pd.DataFrame(index= range(1, maxExpSize, 1),
 resultDf.fillna(0)
 
 
-train = pd.read_csv("data/amazon/train.csv")
+train = pd.read_csv("data/dbpedia/DBPEDIA_train.csv")
+val = pd.read_csv("data/dbpedia/DBPEDIA_val.csv")
+test = pd.read_csv("data/dbpedia/DBPEDIA_test.csv")
 
-x = train['Text'].tolist()
-y = train['Cat2'].tolist()
-y_top = train['Cat1'].tolist()
+x = train['text'].tolist()
+y = train[lable_category].tolist()
 
+x_val = val['text'].tolist()
+y_val = val[lable_category].tolist()
 
-# Train/val split
-test_idx = np.random.choice(len(x), int(train_val_split * len(x)), replace=False)
+val_idx = np.arange(len(x), len(x) + len(x_val))
+
+x += x_val
+y += y_val
+
+x_test = test['text'].tolist()
+y_test = test[lable_category].tolist()
+
+test_idx = np.arange(len(x), len(x) + len(x_test))
+
+x += x_test
+y += y_test
 
 y = LabelEncoder().fit_transform(y)
-y_top = LabelEncoder().fit_transform(y_top)
 print("Data loaded!")
 
 
@@ -62,13 +74,12 @@ print("Data loaded!")
 kf = KFold(n_splits=k_split, shuffle=True)
 frameIterator = 0
 timestamp = datetime.now().strftime("%d_%b_%y_%H_%M_%S")
-csv_name = "Hierarchical_HypOpt_" + lable_category + "_" + timestamp + ".csv"
-hierarchy = OneHotEncoder(sparse=False).fit_transform(y_top.reshape(-1, 1))
+csv_name = "DBPEDIA_Flat_HypOpt_" + lable_category + "_" + timestamp + ".csv"
 
 for mdf in dfs:
-    t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=None, verbose=1, max_df=mdf)
+    t2g = Text2GraphTransformer(n_jobs=1, min_df=50, save_path=None, verbose=1, max_df=mdf)
 
-    g = t2g.fit_transform(x, y, test_idx=test_idx, hierarchy_feats=hierarchy)
+    g = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx)
     print("Graph built!")
 
     # Mask for doc nodes
@@ -116,11 +127,11 @@ for mdf in dfs:
                             gcn.eval()
                             with th.no_grad():
                                 logits = gcn(g)
-                                val_loss = criterion(logits[g.test_mask], g.y[g.test_mask])
-                                pred_val = np.argmax(logits[g.test_mask].cpu().numpy(), axis=1)
-                                pred_train = np.argmax(logits[g.train_mask].cpu().numpy(), axis=1)
-                                f1_val = f1_score(g.y.cpu()[g.test_mask], pred_val, average="macro")
-                                acc_train = accuracy_score(g.y.cpu()[g.train_mask], pred_train)
+                                val_loss = criterion(logits[g.val_mask], g.y[g.val_mask])
+                                pred_val = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
+                                pred_train = np.argmax(logits[g.val_mask].cpu().numpy(), axis=1)
+                                f1_val = f1_score(g.y.cpu()[g.val_mask], pred_val, average="macro")
+                                acc_train = accuracy_score(g.y.cpu()[g.val_mask], pred_train)
                             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                             f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
                         scores[i] = f1_val
@@ -138,3 +149,4 @@ for mdf in dfs:
 resultDf.to_csv(csv_name, encoding='utf-8')
 
 print("Optimization finished!")
+
