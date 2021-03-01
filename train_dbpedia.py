@@ -31,6 +31,7 @@ th.random.manual_seed(seed)
 save_results = True
 labels = "l3"
 window_size = 20
+MAX_LENGTH = 100
 
 try:
     df = pd.read_csv(result_file)
