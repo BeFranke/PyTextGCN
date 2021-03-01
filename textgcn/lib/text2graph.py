@@ -21,15 +21,15 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs, max_len):
     if verbose > 0:
         print("Tokenizing text and removing unwanted words...")
     if max_len is None:
-        slice = slice(None)
+        sl = slice(None)
     else:
-        slice = slice(max_len)
+        sl = slice(max_len)
 
     X = jl.Parallel(n_jobs=n_jobs)(
         jl.delayed(
             lambda doc: [
                 x.lower() for x in nltk.RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in vocabulary
-            ][slice]
+            ][sl]
         )(doc) for doc in tqdm(X)
     )
     max_sent_len = max(map(len, X))
