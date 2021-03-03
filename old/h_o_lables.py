@@ -43,7 +43,7 @@ resultDf = pd.DataFrame(index= range(1, int(maxExpSize + 1), 1),
 resultDf.fillna(0)
 
 
-train = pd.read_csv("data/amazon/train.csv")
+train = pd.read_csv("../data/amazon/train.csv")
 
 #save_path = "textgcn/graphs/"
 save_path = None
