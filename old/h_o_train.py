@@ -42,7 +42,7 @@ resultDf = pd.DataFrame(index= range(1, maxExpSize, 1),
 resultDf.fillna(0)
 
 
-train = pd.read_csv("data/amazon/train.csv")
+train = pd.read_csv("../data/amazon/train.csv")
 
 x = train['Text'].tolist()
 y = train[lable_category].tolist()
