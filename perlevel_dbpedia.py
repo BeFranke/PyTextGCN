@@ -20,11 +20,12 @@ lr = 0.05
 save_model = False
 dropout = 0.7
 model = GCN
-max_df = 0.5
+max_df = 0.4
 n_hidden = 32
-
 seed = 42
 result_file = "results_dbpedia.csv"
+window_size = 5
+MAX_LENGTH = 15
 
 np.random.seed(seed)
 th.random.manual_seed(seed)
@@ -83,7 +84,8 @@ del y_top2_test
 
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=max_df)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=100, save_path=save_path, verbose=1, max_df=max_df, max_length=MAX_LENGTH,
+                            window_size=window_size)
 
 
 g1 = t2g.fit_transform(x, y_top1, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=None)
@@ -134,7 +136,7 @@ print(f"shape of hierarchy_true: {hierarchy_true1.shape}")
 del gcn1
 del g1
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=max_df)
+
 g2 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=hierarchy1)
 gcn2 = model(g2.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden, dropout=dropout)
 
@@ -183,7 +185,6 @@ del gcn1
 del g1
 
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=5, save_path=save_path, verbose=1, max_df=max_df)
 g3 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=hierarchy2)
 gcn3 = model(g3.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden, dropout=dropout)
 
@@ -236,5 +237,5 @@ time_end = datetime.now()
 print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
 i = df.index.max() + 1 if df.index.max() != np.nan else 0
-df.loc[i] = {'seed': seed, 'model': "GCN" if isinstance(gcn2, GCN) else "EGCN", 'hierarchy': "per-level", 'f1-macro': f1, 'accuracy': acc_test}
+df.loc[i] = {'seed': seed, 'model': "GCN", 'hierarchy': "per-level", 'f1-macro': f1, 'accuracy': acc_test}
 df.to_csv(result_file, index=False)
