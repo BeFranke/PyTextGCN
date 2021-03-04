@@ -11,26 +11,6 @@ from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from textgcn.lib.models import MLP
 
 
-def csr_to_torch(csr):
-    acoo = csr.tocoo()
-    return th.sparse_coo_tensor(th.LongTensor([acoo.row.tolist(), acoo.col.tolist()]),
-                                th.FloatTensor(acoo.data.astype(np.float32)),
-                                size=csr.shape)
-
-
-def append_feats(feats, top_labels):
-    feats = feats.cpu()
-    if isinstance(top_labels, np.ndarray):
-        top_labels = th.from_numpy(top_labels)
-    indices = th.nonzero(top_labels).t()
-    values = top_labels[indices[0], indices[1]]
-    if isinstance(top_labels, np.ndarray):
-        values = th.from_numpy(values)
-    mat = th.sparse.FloatTensor(indices, values, top_labels.shape)
-    mat = mat.cpu()
-    return th.cat([feats, mat], dim=1)
-
-
 
 CPU_ONLY = False
 EARLY_STOPPING = False

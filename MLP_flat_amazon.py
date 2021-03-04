@@ -7,13 +7,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
+from mlp_helper import load_amazon
 from textgcn.lib.models import MLP
 
-def csr_to_torch(csr):
-    acoo = csr.tocoo()
-    return th.sparse_coo_tensor(th.LongTensor([acoo.row.tolist(), acoo.col.tolist()]),
-                                th.FloatTensor(acoo.data.astype(np.float32)),
-                                size=csr.shape)
 
 
 CPU_ONLY = False
@@ -28,7 +24,7 @@ model = MLP
 np.random.seed(seed)
 th.random.manual_seed(seed)
 save_results = True
-labels = "Cat2"
+label = 1 # last label
 
 
 try:
@@ -36,49 +32,12 @@ try:
 except:
     df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
 
-train = pd.read_csv("data/amazon/train.csv")
-test = pd.read_csv("data/amazon/test.csv")
-
-save_path = "textgcn/graphs/"
-# save_path = None
-raw = train['Text']
-y_train = train[labels]
-
-# Train/val split
-val_idx = np.random.choice(len(raw), int(train_val_split * len(raw)), replace=False)
-val_mask = np.zeros(len(raw), dtype=np.bool)
-val_mask[val_idx] = 1
-raw_val = raw[val_mask]
-raw_train = raw[np.logical_not(val_mask)]
-
-y_val = y_train[val_mask]
-y_train = y_train[np.logical_not(val_mask)]
-
-tfidf = TfidfVectorizer(stop_words='english', max_df=0.9)
-x_train = tfidf.fit_transform(raw_train)
-y_train = y_train.tolist()
-x_val = tfidf.transform(raw_val.tolist())
-
-
-raw_test = test['Text'].tolist()
-y_test = test[labels].tolist()
-
-x_test = tfidf.transform(raw_test)
-
-le = LabelEncoder()
-y_train = le.fit_transform(y_train)
-y_val = le.transform(y_val)
-y_test = le.transform(y_test)
-
-print("Data loaded!")
-
-del raw
-del raw_train
-del raw_val
-del raw_test
-
-x_train, x_val, x_test = map(csr_to_torch, [x_train, x_val, x_test])
-y_train, y_val, y_test = map(th.from_numpy, [y_train, y_val, y_test])
+print("Preprocessing data.")
+(x_train, y_train), (x_test, y_test), (x_val, y_val) = load_amazon(train_val_split=train_val_split)
+print(f"Training on category: {label}")
+y_train = y_train[label] # last category
+y_val = y_val[label]
+y_test = y_test[label]
 
 model = MLP(x_train.shape[1], len(np.unique(y_train)), [256, 128], dropout=dropout)
 
@@ -127,14 +86,8 @@ with th.no_grad():
 print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")
 
-
 if save_results:
     i = df.index.max() + 1 if df.index.max() != np.nan else 0
     df.loc[i] = {'seed': seed, 'model': "MLP", 'hierarchy': "flat", 'f1-macro': f1,
                  'accuracy': acc_test}
     df.to_csv(result_file)
-
-
-
-
-

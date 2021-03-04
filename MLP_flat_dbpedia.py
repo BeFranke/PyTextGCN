@@ -7,19 +7,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
+from mlp_helper import load_dbpedia
 from textgcn.lib.models import MLP
-
-def csr_to_torch(csr):
-    acoo = csr.tocoo()
-    return th.sparse_coo_tensor(th.LongTensor([acoo.row.tolist(), acoo.col.tolist()]),
-                                th.FloatTensor(acoo.data.astype(np.float32)),
-                                size=csr.shape)
-
 
 CPU_ONLY = False
 EARLY_STOPPING = False
 epochs = 500
-train_val_split = 0.1
 lr = 0.05
 dropout = 0.7
 seed = 44
@@ -28,7 +21,7 @@ model = MLP
 np.random.seed(seed)
 th.random.manual_seed(seed)
 save_results = True
-labels = "l3"
+label = 3 # last category
 
 
 try:
@@ -36,44 +29,13 @@ try:
 except:
     df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
 
-train = pd.read_csv("data/dbpedia/DBPEDIA_train.csv")
-val = pd.read_csv("data/dbpedia/DBPEDIA_val.csv")
-test = pd.read_csv("data/dbpedia/DBPEDIA_test.csv")
 
-# save_path = None
-raw_train = train['text']
-y_train = train[labels]
+(x_train, y_train), (x_test, y_test), (x_val, y_val) = load_dbpedia()
 
-# Train/val split
-raw_val = val['text']
-y_val = val[labels]
-
-
-tfidf = TfidfVectorizer(stop_words='english', max_df=0.9)
-x_train = tfidf.fit_transform(raw_train)
-y_train = y_train.tolist()
-x_val = tfidf.transform(raw_val.tolist())
-y_val = y_val.tolist()
-
-
-raw_test = test['text'].tolist()
-y_test = test[labels].tolist()
-
-x_test = tfidf.transform(raw_test)
-
-le = LabelEncoder()
-y_train = le.fit_transform(y_train)
-y_val = le.transform(y_val)
-y_test = le.transform(y_test)
-
-print("Data loaded!")
-
-del raw_train
-del raw_val
-del raw_test
-
-x_train, x_val, x_test = map(csr_to_torch, [x_train, x_val, x_test])
-y_train, y_val, y_test = map(th.from_numpy, [y_train, y_val, y_test])
+print(f"Training on category: {label}")
+y_train = y_train[label]
+y_test = y_test[label]
+y_val = y_val[label]
 
 model = MLP(x_train.shape[1], len(np.unique(y_train)), [256, 128], dropout=dropout)
 
@@ -122,14 +84,8 @@ with th.no_grad():
 print(f"Test Accuracy: {acc_test: .3f}")
 print(f"F1-Macro: {f1: .3f}")
 
-
 if save_results:
     i = df.index.max() + 1 if df.index.max() != np.nan else 0
     df.loc[i] = {'seed': seed, 'model': "MLP", 'hierarchy': "flat", 'f1-macro': f1,
                  'accuracy': acc_test}
     df.to_csv(result_file)
-
-
-
-
-

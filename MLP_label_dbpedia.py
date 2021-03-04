@@ -8,7 +8,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
-from mlp_helper import csr_to_torch, select_relabel_documents, load_amazon, torch_to_csr
+from mlp_helper import csr_to_torch, select_relabel_documents, load_amazon, torch_to_csr, load_dbpedia
 from textgcn.lib.models import MLP
 
 
@@ -31,11 +31,8 @@ try:
     df = pd.read_csv(result_file)
 except:
     df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
-
-
 print("Loading data.")
-
-(x_train, y_train), (x_test, y_test), (x_val, y_val) = load_amazon(train_val_split=train_val_split)
+(x_train, y_train), (x_test, y_test), (x_val, y_val) = load_dbpedia()
 print("Training per-label approach for all categories.")
 
 # First category (= flat)
@@ -87,13 +84,14 @@ for epoch in range(epochs):
 # Train subsequent categories:
 
 
-for cat in range(1): # amazon has only one remaining category ;)
+for cat in range(2): # 2 levels for dbpedia
     criterion = th.nn.CrossEntropyLoss(reduction='mean')
     device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
-    l2models = [] # store model for each label
     encoders = []
 
-    for label in np.unique(y_train[0].cpu()):
+    predictions = np.zeros_like(y_test[cat+1])
+
+    for label in np.unique(y_train[cat].cpu()):
         print(f"Processing top level label {label}")
 
         # Filter labels
@@ -107,7 +105,6 @@ for cat in range(1): # amazon has only one remaining category ;)
         x_val_i = x_val_i.to(device).float()
 
         model2 = MLP(x_train.shape[1], len(th.unique(y_train_i)), [256, 128], dropout=dropout)
-        l2models.append(model2)
         model2 = model2.to(device).float()
 
         print(f"x_val shape: {x_val.shape}")
@@ -116,7 +113,7 @@ for cat in range(1): # amazon has only one remaining category ;)
         # optimizer needs to be constructed AFTER the model was moved to GPU
         optimizer = th.optim.Adam(model2.parameters(), lr=lr)
         length = len(str(epochs))
-        print("### Training start! ###")
+        print(f"### Training start (Level {cat+1} Label {label})! ###")
         for epoch in range(epochs):
             model2.train()
             outputs = model2(x_train_i)
@@ -135,25 +132,26 @@ for cat in range(1): # amazon has only one remaining category ;)
                 acc_train = accuracy_score(y_train_i.cpu(), pred_train)
                 print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                       f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+                del logits, logits_val, pred_val, pred_train, f1_val, acc_train
 
-        model2, x_train_i, y_train_i, x_val_i = map(lambda x: x.cpu(), [model2, x_train_i, y_train_i, x_val_i])
+        x_train_i, y_train_i, x_val_i = map(lambda x: x.cpu(), [x_train_i, y_train_i, x_val_i])
+
+        # Prediction
+        with th.no_grad():
+            mask = y_pred == label
+            masked_test = csr_to_torch(torch_to_csr(x_test)[mask])
+            pred = np.argmax(model2(masked_test.to(device)).cpu(), axis=1)
+            predictions[mask] = encoders[label].inverse_transform(pred)
+
+        model2 = model2.cpu()
 
     print("Optimization finished!")
 
 
-    with th.no_grad():
-        x_test = x_test.to(device)
-        predictions = np.zeros_like(y_test[cat+1])
-        for y_i in np.unique(y_test[cat]):
-            mask = y_pred == y_i
-            model2 = l2models[y_i].to(device)
-            masked_test = csr_to_torch(torch_to_csr(x_test)[mask])
-            pred = np.argmax(model2(masked_test.to(device)).cpu(), axis=1)
-            predictions[mask] = encoders[y_i].inverse_transform(pred)
-        y_pred = predictions # store predictions for next category
+    y_pred = predictions # store predictions for next category
 
-        acc_test = accuracy_score(y_test[cat+1], predictions)
-        f1 = f1_score(y_test[cat+1], predictions, average='macro')
+    acc_test = accuracy_score(y_test[cat+1], predictions)
+    f1 = f1_score(y_test[cat+1], predictions, average='macro')
 
     print(f"Test Accuracy: {acc_test: .3f}")
     print(f"F1-Macro: {f1: .3f}")
