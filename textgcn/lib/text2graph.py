@@ -2,7 +2,7 @@ import glob
 import os
 import pickle
 import time
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Optional
 
 import joblib as jl
 import numpy as np
@@ -17,14 +17,19 @@ from scipy import sparse as sp
 from .clib.graphbuilder import compute_word_word_edges
 
 
-def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
+def _encode_input(X, n_jobs, vocabulary, verbose, n_docs, max_len):
     if verbose > 0:
         print("Tokenizing text and removing unwanted words...")
+    if max_len is None:
+        sl = slice(None)
+    else:
+        sl = slice(max_len)
+
     X = jl.Parallel(n_jobs=n_jobs)(
         jl.delayed(
             lambda doc: [
                 x.lower() for x in nltk.RegexpTokenizer(r"\w+").tokenize(doc) if x.lower() in vocabulary
-            ]
+            ][sl]
         )(doc) for doc in tqdm(X)
     )
     max_sent_len = max(map(len, X))
@@ -43,7 +48,8 @@ def _encode_input(X, n_jobs, vocabulary, verbose, n_docs):
 
 class Text2GraphTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, min_df: Union[int, float] = 5, window_size: int = 20, save_path: str = None,
-                 n_jobs: int = 1, max_df=1.0, verbose=0, rm_stopwords=True, sparse_features=True):
+                 n_jobs: int = 1, max_df=1.0, verbose=0, rm_stopwords=True, sparse_features=True,
+                 max_length: Optional[int] = None):
         """
         sklearn-module that transforms a text corpus into a graph, according to the algorithm specified by
         Yao et al, Graph Convolutional Networks for Text Classification (2018), https://arxiv.org/abs/1809.05679.
@@ -61,6 +67,7 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
                                 during training but can only be used if the neural net can handle sparse matrices.
                                 Depending on architecture, enabling this can lead to CUDA errors when training on GPU.
         """
+        self.max_length = max_length
         self.sparse_features = sparse_features
         self.rm_stopwords = rm_stopwords
         self.verbose = verbose
@@ -129,7 +136,8 @@ class Text2GraphTransformer(BaseEstimator, TransformerMixin):
         self.n_docs_ = n_docs
         self.n_vocabs_ = n_vocabs
         self.n_nodes_ = n_docs + n_vocabs
-        X, self.max_sent_len_ = _encode_input(X, self.n_jobs, self.cv.vocabulary_, self.verbose, self.n_docs_)
+        X, self.max_sent_len_ = _encode_input(X, self.n_jobs, self.cv.vocabulary_, self.verbose, self.n_docs_,
+                                              self.max_length)
         # build the graph
         if self.verbose > 0:
             print(f"Building doc-word edges...")

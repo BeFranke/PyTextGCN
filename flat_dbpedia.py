@@ -17,20 +17,21 @@ from textgcn.lib.models import *
 
 CPU_ONLY = True
 EARLY_STOPPING = False
-epochs = 500
+epochs = 100
 train_val_split = 0.1
 lr = 0.05
 save_model = False
 dropout = 0.5
-max_df = 0.3
-seed = 42
+max_df = 0.4
+seed = 43
 result_file = "results_dbpedia.csv"
 model = GCN
 np.random.seed(seed)
 th.random.manual_seed(seed)
 save_results = True
 labels = "l3"
-window_size = 20
+window_size = 5
+MAX_LENGTH = 15
 
 try:
     df = pd.read_csv(result_file)
@@ -66,7 +67,8 @@ y += y_test
 y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=60, save_path=None, verbose=1, max_df=max_df, window_size=window_size)
+t2g = Text2GraphTransformer(n_jobs=8, min_df=100, save_path=None, verbose=1, max_df=max_df, window_size=window_size,
+                            max_length=MAX_LENGTH)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 
@@ -75,7 +77,7 @@ print("Graph built!")
 
 # gcn = JumpingKnowledgeNetwork(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout, activation=th.nn.SELU)
 # gcn = EGCN(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, embedding_dim=2000, dropout=dropout)
-gcn = model(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=100, dropout=dropout)
+gcn = model(g.x.shape[1], len(np.unique(y)), n_hidden_gcn=32, dropout=dropout)
 
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
 
@@ -87,7 +89,7 @@ g = g.to(device)
 optimizer = th.optim.Adam(gcn.parameters(), lr=lr, amsgrad=True)
 # optimizer = th.optim.SGD(gcn.parameters(), lr=0.05)
 # optimizer = th.optim.Adadelta(gcn.parameters())
-scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, factor=0.5, patience=15, cooldown=5)
+# scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True, factor=0.5, patience=15, cooldown=5)
 # scheduler = th.optim.lr_scheduler.CyclicLR(optimizer, base_lr=0.0001, max_lr=0.5, step_size_up=50)
 history = []
 length = len(str(epochs))
