@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch as th
+import os
 from sklearn.metrics import f1_score, accuracy_score
 
 from mlp_helper import csr_to_torch, select_relabel_documents, load_amazon, torch_to_csr, load_dbpedia
@@ -9,7 +10,7 @@ from textgcn.lib.models import MLP
 # Settings
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 20
+epochs = 2
 lr = 0.05
 dropout = 0.7
 seed = 44
@@ -20,13 +21,10 @@ th.random.manual_seed(seed)
 save_results = True
 
 # Dataset dependend settings
-dataset = "amazon"
+dataset = "dbpedia"
 train_val_split = 0.1  # only for amazon
 
-try:
-    df = pd.read_csv(result_file)
-except:
-    df = pd.DataFrame(columns=["seed", "dataset", "hierarchy", "category", "f1-macro", "accuracy"])
+df = pd.DataFrame(columns=["seed", "dataset", "hierarchy", "category", "f1-macro", "accuracy"])
 
 print("Loading data.")
 if dataset == "amazon":
@@ -88,7 +86,7 @@ for epoch in range(epochs):
 # Train subsequent categories:
 
 
-for cat in range(categories-1):
+for cat in range(categories - 1):
     criterion = th.nn.CrossEntropyLoss(reduction='mean')
     device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
     encoders = []
@@ -158,10 +156,13 @@ for cat in range(categories-1):
 
     print(f"Test Accuracy: {acc_test: .3f}")
     print(f"F1-Macro: {f1: .3f}")
-
     if save_results:
-        i = df.index.max() + 1 if df.index.max() != np.nan else 0
-        df.loc[i] = {'seed': seed, "dataset": dataset, 'hierarchy': "per-label", "category": cat,
-                     'f1-macro': f1,
-                     'accuracy': acc_test}
-        df.to_csv(result_file)
+        df = df.append({'seed': seed, "dataset": dataset, 'hierarchy': "per-label", "category": cat,
+                        'f1-macro': f1,
+                        'accuracy': acc_test}, ignore_index=True)
+
+if save_results:
+    if not os.path.isfile(result_file):
+        df.to_csv(result_file, index=False)
+    else:
+        df.to_csv(result_file, index=False, mode='a', header=False)
