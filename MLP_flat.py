@@ -12,10 +12,13 @@ from textgcn.lib.models import MLP
 import os
 
 CPU_ONLY = False
-EARLY_STOPPING = False
-epochs = 6
-lr = 0.05
-dropout = 0.7
+EARLY_STOPPING = True
+patience = 10
+min_epochs = 30
+
+epochs = 500
+lr = 2e-3
+dropout = 0.5
 seed = 44
 result_file = "results_mlp.csv"
 model = MLP
@@ -41,6 +44,8 @@ else:
 print("Training per-label approach for all categories.")
 
 for category in range(categories):
+    history = []
+
     print(f"Training on category: {category}")
     y_train_c = y_train[category]
     y_test_c = y_test[category]
@@ -81,6 +86,19 @@ for category in range(categories):
             acc_train = accuracy_score(y_train_c.cpu(), pred_train)
             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                   f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+
+        history.append((loss.item(), f1_val))
+
+        # scheduler.step(val_loss)
+
+        if epoch > min_epochs and EARLY_STOPPING:
+            dec_steps = 0
+            for i in range(patience):
+                dec_steps += (history[-(i+1)][1] <= history[-(patience+1)][1])
+            if dec_steps >= patience:
+                print(f"Early stopping! Validation f1 decreased for {dec_steps} epochs!")
+                break
+
 
     print("Optimization finished!")
 

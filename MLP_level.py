@@ -11,11 +11,14 @@ from mlp_helper import load_amazon, load_dbpedia, append_feats
 from textgcn.lib.models import MLP
 
 CPU_ONLY = False
-EARLY_STOPPING = False
-epochs = 50
+EARLY_STOPPING = True
+patience = 10
+min_epochs = 30
+
+epochs = 200
 lr = 0.05
 dropout = 0.7
-seed = 44
+seed = 42
 result_file = "results_mlp.csv"
 model = MLP
 np.random.seed(seed)
@@ -23,7 +26,7 @@ th.random.manual_seed(seed)
 save_results = True
 
 # Dataset dependend settings
-dataset = "dbpedia"
+dataset = "amazon"
 train_val_split = 0.1  # only for amazon
 
 df = pd.DataFrame(columns=["seed", "dataset", "hierarchy", "category", "f1-macro", "accuracy"])
@@ -62,6 +65,7 @@ length = len(str(epochs))
 print("### Training start (Top-Level)! ###")
 y_pred = None
 
+history = []
 for epoch in range(epochs):
     model1.train()
     outputs = model1(x_train)
@@ -85,7 +89,23 @@ for epoch in range(epochs):
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
 
+        history.append((loss.item(), f1_val))
+
+        # scheduler.step(val_loss)
+
+
+    if epoch > min_epochs and EARLY_STOPPING:
+        dec_steps = 0
+        for i in range(patience):
+            dec_steps += (history[-(i+1)][1] <= history[-(patience+1)][1])
+        if dec_steps >= patience:
+            print(f"Early stopping! Validation f1 decreased for {dec_steps} epochs!")
+            break
+
 for cat in range(categories - 1):
+
+    history = []
+
     criterion = th.nn.CrossEntropyLoss(reduction='mean')
     device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
 
@@ -133,6 +153,15 @@ for cat in range(categories - 1):
             acc_train = accuracy_score(y_train[cat+1].cpu(), pred_train)
             print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                   f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+            history.append((loss.item(), f1_val))
+
+        if epoch > min_epochs and EARLY_STOPPING:
+            dec_steps = 0
+            for i in range(patience):
+                dec_steps += (history[-(i+1)][1] <= history[-(patience+1)][1])
+            if dec_steps >= patience:
+                print(f"Early stopping! Validation f1 decreased for {dec_steps} epochs!")
+                break
 
     print("Optimization finished!")
 

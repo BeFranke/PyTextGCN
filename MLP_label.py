@@ -9,8 +9,11 @@ from textgcn.lib.models import MLP
 
 # Settings
 CPU_ONLY = False
-EARLY_STOPPING = False
-epochs = 2
+EARLY_STOPPING = True
+patience = 10
+min_epochs = 30
+
+epochs = 100
 lr = 0.05
 dropout = 0.7
 seed = 44
@@ -21,7 +24,7 @@ th.random.manual_seed(seed)
 save_results = True
 
 # Dataset dependend settings
-dataset = "dbpedia"
+dataset = "amazon"
 train_val_split = 0.1  # only for amazon
 
 df = pd.DataFrame(columns=["seed", "dataset", "hierarchy", "category", "f1-macro", "accuracy"])
@@ -38,7 +41,6 @@ else:
 print("Training per-label approach for all categories.")
 
 # First category (= flat)
-
 
 model1 = MLP(x_train.shape[1], len(np.unique(y_train[0])), [256, 128], dropout=dropout)
 criterion = th.nn.CrossEntropyLoss(reduction='mean')
@@ -60,6 +62,7 @@ length = len(str(epochs))
 print("### Training start (Top-Level)! ###")
 y_pred = None
 
+history = []
 for epoch in range(epochs):
     model1.train()
     outputs = model1(x_train)
@@ -82,15 +85,22 @@ for epoch in range(epochs):
         acc_train = accuracy_score(y_train[0].cpu(), pred_train)
         print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
               f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
+        history.append((loss.item(), f1_val))
 
+    if epoch > min_epochs and EARLY_STOPPING:
+        dec_steps = 0
+        for i in range(patience):
+            dec_steps += (history[-(i+1)][1] <= history[-(patience+1)][1])
+        if dec_steps >= patience:
+            print(f"Early stopping! Validation f1 decreased for {dec_steps} epochs!")
+            break
 # Train subsequent categories:
 
 
 for cat in range(categories - 1):
     criterion = th.nn.CrossEntropyLoss(reduction='mean')
     device = th.device('cuda' if th.cuda.is_available() and not CPU_ONLY else 'cpu')
-    encoders = []
-
+    history = []
     predictions = np.zeros_like(y_test[cat + 1])
 
     for label in np.unique(y_train[cat].cpu()):
@@ -101,7 +111,6 @@ for cat in range(categories - 1):
         (x_train_i, y_train_i), (x_val_i, y_val_i), le = \
             select_relabel_documents(x_train, x_val, y_train[cat + 1], y_val[cat + 1], y_train[cat], y_val[cat], label)
 
-        encoders.append(le)
         x_train_i = x_train_i.to(device).float()
         y_train_i = th.from_numpy(y_train_i).to(device)
         x_val_i = x_val_i.to(device).float()
@@ -134,7 +143,14 @@ for cat in range(categories - 1):
                 acc_train = accuracy_score(y_train_i.cpu(), pred_train)
                 print(f"[{epoch + 1:{length}}] loss: {loss.item(): .3f}, "
                       f"training accuracy: {acc_train: .3f}, val_f1: {f1_val: .3f}")
-                del logits, logits_val, pred_val, pred_train, f1_val, acc_train
+                history.append((loss.item(), f1_val))
+            if epoch > min_epochs and EARLY_STOPPING:
+                dec_steps = 0
+                for i in range(patience):
+                    dec_steps += (history[-(i+1)][1] <= history[-(patience+1)][1])
+                if dec_steps >= patience:
+                    print(f"Early stopping! Validation f1 decreased for {dec_steps} epochs!")
+                    break
 
         x_train_i, y_train_i, x_val_i = map(lambda x: x.cpu(), [x_train_i, y_train_i, x_val_i])
 
@@ -143,7 +159,7 @@ for cat in range(categories - 1):
             mask = y_pred == label
             masked_test = csr_to_torch(torch_to_csr(x_test)[mask])
             pred = np.argmax(model2(masked_test.to(device)).cpu(), axis=1)
-            predictions[mask] = encoders[label].inverse_transform(pred)
+            predictions[mask] = le.inverse_transform(pred)
 
         model2 = model2.cpu()
 
