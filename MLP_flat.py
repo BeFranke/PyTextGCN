@@ -7,35 +7,46 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import f1_score, accuracy_score
 from sklearn.preprocessing import LabelEncoder
 
-from mlp_helper import load_dbpedia
+from mlp_helper import load_dbpedia, load_amazon
 from textgcn.lib.models import MLP
 
 CPU_ONLY = False
 EARLY_STOPPING = False
-epochs = 500
+epochs = 10
 lr = 0.05
 dropout = 0.7
 seed = 44
-result_file = "results_dbpedia.csv"
+result_file = "results_mlp.csv"
 model = MLP
 np.random.seed(seed)
 th.random.manual_seed(seed)
 save_results = True
-label = 3 # last category
 
+# dataset dependend settings
+dataset = "amazon"
+category = 1 # flat
+train_val_split = 0.1 #only for amazon
 
 try:
     df = pd.read_csv(result_file)
 except:
-    df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
+    df = pd.DataFrame(columns=["seed", "dataset", "hierarchy", "category", "f1-macro", "accuracy"])
 
+print("Loading data.")
+if dataset == "amazon":
+    categories = 2
+    (x_train, y_train), (x_test, y_test), (x_val, y_val) = load_amazon(train_val_split=train_val_split)
+else:
+    dataset = "dbpedia"
+    categories = 3
+    (x_train, y_train), (x_test, y_test), (x_val, y_val) = load_dbpedia()
 
-(x_train, y_train), (x_test, y_test), (x_val, y_val) = load_dbpedia()
+print("Training per-label approach for all categories.")
 
-print(f"Training on category: {label}")
-y_train = y_train[label]
-y_test = y_test[label]
-y_val = y_val[label]
+print(f"Training on category: {category}")
+y_train = y_train[category]
+y_test = y_test[category]
+y_val = y_val[category]
 
 model = MLP(x_train.shape[1], len(np.unique(y_train)), [256, 128], dropout=dropout)
 
@@ -86,6 +97,7 @@ print(f"F1-Macro: {f1: .3f}")
 
 if save_results:
     i = df.index.max() + 1 if df.index.max() != np.nan else 0
-    df.loc[i] = {'seed': seed, 'model': "MLP", 'hierarchy': "flat", 'f1-macro': f1,
+    df.loc[i] = {'seed': seed, "dataset": dataset, 'hierarchy': 'flat', 'category': category,
+                 'f1-macro': f1,
                  'accuracy': acc_test}
-    df.to_csv(result_file)
+    df.to_csv(result_file, index=False)
