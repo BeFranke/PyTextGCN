@@ -30,7 +30,7 @@ result_file = "results.csv"
 model = GCN
 np.random.seed(seed)
 th.random.manual_seed(seed)
-save_results = True
+save_results = False
 labels = "Cat2"
 window_size=20
 

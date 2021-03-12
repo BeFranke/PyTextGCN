@@ -13,20 +13,20 @@ import torch as th
 from textgcn import Text2GraphTransformer
 from textgcn.lib.models import JumpingKnowledgeNetwork, GCN, EGCN
 
-CPU_ONLY = False
+CPU_ONLY = True
 EARLY_STOPPING = False
-epochs = 500
+epochs = 100
 lr = 0.05
 save_model = False
-dropout = 0.7
+dropout = 0.5
 model = GCN
 max_df = 0.4
 n_hidden = 32
-seed = 42
+seed = 44
 result_file = "results_dbpedia.csv"
 window_size = 5
 MAX_LENGTH = 15
-
+save_results = True
 np.random.seed(seed)
 th.random.manual_seed(seed)
 
@@ -36,9 +36,9 @@ except:
     df = pd.DataFrame(columns=["seed", "model", "hierarchy", "f1-macro", "accuracy"])
 
 
-train = pd.read_csv("data/dbpedia/train_DBPEDIA.csv")
-val = pd.read_csv("data/dbpedia/val_DBPEDIA.csv")
-test = pd.read_csv("data/dbpedia/test_DBPEDIA.csv")
+train = pd.read_csv("data/dbpedia/DBPEDIA_train.csv")
+val = pd.read_csv("data/dbpedia/DBPEDIA_val.csv")
+test = pd.read_csv("data/dbpedia/DBPEDIA_test.csv")
 
 # save_path = "textgcn/graphs/"
 save_path = None
@@ -84,7 +84,7 @@ del y_top2_test
 
 print("Data loaded!")
 
-t2g = Text2GraphTransformer(n_jobs=8, min_df=100, save_path=save_path, verbose=1, max_df=max_df, max_length=MAX_LENGTH,
+t2g = Text2GraphTransformer(n_jobs=1, min_df=100, save_path=save_path, verbose=1, max_df=max_df, max_length=MAX_LENGTH,
                             window_size=window_size)
 
 
@@ -137,8 +137,8 @@ del gcn1
 del g1
 
 
-g2 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=hierarchy1)
-gcn2 = model(g2.x.shape[1], len(np.unique(y)), n_hidden_gcn=n_hidden, dropout=dropout)
+g2 = t2g.fit_transform(x, y_top2, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=hierarchy1)
+gcn2 = model(g2.x.shape[1], len(np.unique(y_top2)), n_hidden_gcn=n_hidden, dropout=dropout)
 
 gcn2 = gcn2.to(device)
 g2 = g2.to(device)
@@ -177,12 +177,9 @@ with th.no_grad():
 del gcn2
 del g2
 
-hierarchy2 = OneHotEncoder(sparse=False).fit_transform(y_top1.reshape(-1, 1))
+hierarchy2 = OneHotEncoder(sparse=False).fit_transform(y_top2.reshape(-1, 1))
 print(f"shape of hierarchy: {hierarchy2.shape}")
 print(f"shape of hierarchy_true: {hierarchy_true2.shape}")
-
-del gcn1
-del g1
 
 
 g3 = t2g.fit_transform(x, y, test_idx=test_idx, val_idx=val_idx, hierarchy_feats=hierarchy2)
@@ -236,6 +233,7 @@ print(conf_mat)
 time_end = datetime.now()
 print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 
-i = df.index.max() + 1 if df.index.max() != np.nan else 0
-df.loc[i] = {'seed': seed, 'model': "GCN", 'hierarchy': "per-level", 'f1-macro': f1, 'accuracy': acc_test}
-df.to_csv(result_file, index=False)
+if save_results:
+    i = df.index.max() + 1 if df.index.max() != np.nan else 0
+    df.loc[i] = {'seed': seed, 'model': "GCN", 'hierarchy': "per-level", 'f1-macro': f1, 'accuracy': acc_test}
+    df.to_csv(result_file, index=False)

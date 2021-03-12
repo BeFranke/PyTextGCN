@@ -23,7 +23,7 @@ lr = 0.05
 save_model = False
 dropout = 0.5
 max_df = 0.4
-seed = 43
+seed = 44
 result_file = "results_dbpedia.csv"
 model = GCN
 np.random.seed(seed)
@@ -144,5 +144,5 @@ print(f"Training took {time_end - time_start} for {epoch + 1} epochs.")
 if save_results:
     i = df.index.max() + 1 if df.index.max() != np.nan else 0
     df.loc[i] = {'seed': seed, 'model': "GCN" if isinstance(gcn, GCN) else "EGCN", 'hierarchy': "flat", 'f1-macro': f1, 'accuracy': acc_test}
-    df.to_csv(result_file)
+    df.to_csv(result_file, index=False)
 
