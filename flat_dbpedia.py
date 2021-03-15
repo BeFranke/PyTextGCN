@@ -68,7 +68,7 @@ y = LabelEncoder().fit_transform(y)
 print("Data loaded!")
 
 t2g = Text2GraphTransformer(n_jobs=8, min_df=100, save_path=None, verbose=1, max_df=max_df, window_size=window_size,
-                            max_length=MAX_LENGTH)
+                        max_length=MAX_LENGTH)
 # t2g = Text2GraphTransformer(n_jobs=8, min_df=1, save_path=save_path, verbose=1, max_df=1.0)
 ls = os.listdir("textgcn/graphs")
 
