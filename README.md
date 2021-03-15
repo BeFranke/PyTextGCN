@@ -26,8 +26,20 @@ From the project root, the cython compilation can be done with:
 `cd textgcn/lib/clib && python setup.py build_ext --inplace`
 
 ## Usage
-Either run `train.py` to reproduce our experiments or import the modules `textgcn.Text2GraphTransformer` 
-and/or `textgcn.GCN` into your own code. 
+To compute a graph from a list of strings (where each string contains the text of one document) called `X`, a list of labels called `y` and a list of test indices `test_idx`, simply run:
+
+`from textgcn import Text2GraphTransformer`
+
+`t2g = Text2GraphTransformer()`
+
+`graph = t2g.fit_transform(X, y, test_idx=test_idx)`
+
+The resulting object `graph` is a `torch_geometric.data.Data` object containing the resulting graph and can be processed by any torch-geometric-based network.
+For more information on parameters of the `Text2GraphTransformer` and the resulting `Data`-object, consult the [documentation](textgcn/lib/text2graph.py) in the source files.
 
 ## Documentation
 Currently resides in the source files.
+
+
+## How to reproduce our experiments
+Run one of the Python-files in this folder. Each script will produce the result for one experiment for one seed. Seeds can be changed by editing the `seed`-variable in the first part of the file.
